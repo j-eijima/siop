@@ -1,0 +1,46 @@
+name: iOS
+
+on:
+  push:
+    branches: [main]
+    paths: ['ios/**', 'rp/**', '.github/workflows/ios.yml']
+  pull_request:
+    paths: ['ios/**', 'rp/**', '.github/workflows/ios.yml']
+
+jobs:
+  siopkit:
+    name: SIOPKit unit tests
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift test
+        working-directory: ios/SIOPKit
+        run: swift test
+
+  app:
+    name: SIOPApp UI tests
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        working-directory: ios/SIOPApp
+        run: xcodegen generate
+      # EndToEndRPTests drives Safari against the RP, so it has to be running.
+      - name: Start test RP
+        run: |
+          python3 rp/serve.py --port 8080 &
+          for _ in $(seq 30); do
+            curl -sf http://localhost:8080/index.html > /dev/null && exit 0
+            sleep 1
+          done
+          echo "RP did not start" >&2
+          exit 1
+      - name: Test
+        working-directory: ios/SIOPApp
+        run: |
+          xcodebuild test \
+            -project SIOPApp.xcodeproj \
+            -scheme SIOPApp \
+            -destination 'platform=iOS Simulator,name=iPhone 17'
