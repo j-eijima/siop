@@ -87,6 +87,8 @@ xcrun simctl openurl booted "openid://?response_type=id_token\
 
 ## TODO
 
-- request / request_uri(Request Object、alg none / RS256)対応
+- request / request_uri(Request Object、alg none / RS256)対応。それまではメタデータで
+  `request_parameter_supported` と `request_uri_parameter_supported` を false にする。後者は
+  省略時 true が既定なので、書かないと広告したことになる
 - claims パラメータに応じた標準クレームの応答
 - 承認済み RP の履歴表示

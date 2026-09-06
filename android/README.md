@@ -93,5 +93,7 @@ adb shell am start -a android.intent.action.VIEW \
 
 ## Not done yet
 
-- `request` / `request_uri` support (Request Object)
+- `request` / `request_uri` support (Request Object). Until then the metadata sets
+  `request_parameter_supported` and `request_uri_parameter_supported` to false — the latter
+  defaults to true when omitted, so silence would advertise it
 - Returning standard claims according to the `claims` parameter

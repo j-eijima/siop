@@ -176,3 +176,22 @@ final class ErrorResponseTests: XCTestCase {
         )
     }
 }
+
+final class MetadataTests: XCTestCase {
+    /// Advertising a capability that is not implemented sends RPs down a path
+    /// that always fails, so the two are held together here.
+    func testAdvertisesOnlyWhatIsImplemented() {
+        let configuration = SelfIssuedMetadata.configuration
+
+        XCTAssertEqual(configuration["issuer"] as? String, SelfIssuedIDToken.issuer)
+        XCTAssertEqual(configuration["authorization_endpoint"] as? String, "openid:")
+        XCTAssertEqual(configuration["response_types_supported"] as? [String], ["id_token"])
+        XCTAssertEqual(configuration["id_token_signing_alg_values_supported"] as? [String], ["RS256"])
+
+        // request / request_uri are not handled. request_uri_parameter_supported
+        // defaults to true when omitted, so it has to be present and false.
+        XCTAssertNil(configuration["request_object_signing_alg_values_supported"])
+        XCTAssertEqual(configuration["request_parameter_supported"] as? Bool, false)
+        XCTAssertEqual(configuration["request_uri_parameter_supported"] as? Bool, false)
+    }
+}

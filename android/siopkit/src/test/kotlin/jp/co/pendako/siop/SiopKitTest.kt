@@ -6,6 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class Base64UrlTest {
@@ -150,6 +151,28 @@ class SelfIssuedOpTest {
             "https://client.example.org/cb#error=access_denied&state=af0ifjsldkj",
             response.redirectUrl,
         )
+    }
+}
+
+class MetadataTest {
+    /**
+     * Advertising a capability that is not implemented sends RPs down a path
+     * that always fails, so the two are held together here.
+     */
+    @Test
+    fun `advertises only what is implemented`() {
+        val configuration = SelfIssuedMetadata.configuration
+
+        assertEquals(SelfIssuedIdToken.ISSUER, configuration["issuer"])
+        assertEquals("openid:", configuration["authorization_endpoint"])
+        assertEquals(listOf("id_token"), configuration["response_types_supported"])
+        assertEquals(listOf("RS256"), configuration["id_token_signing_alg_values_supported"])
+
+        // request / request_uri are not handled. request_uri_parameter_supported
+        // defaults to true when omitted, so it has to be present and false.
+        assertNull(configuration["request_object_signing_alg_values_supported"])
+        assertEquals(false, configuration["request_parameter_supported"])
+        assertEquals(false, configuration["request_uri_parameter_supported"])
     }
 }
 

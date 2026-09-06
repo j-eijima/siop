@@ -93,6 +93,8 @@ xcrun simctl openurl booted "openid://?response_type=id_token\
 
 ## TODO
 
-- `request` / `request_uri` support (Request Object, alg none / RS256)
+- `request` / `request_uri` support (Request Object, alg none / RS256). Until then the metadata
+  sets `request_parameter_supported` and `request_uri_parameter_supported` to false — the latter
+  defaults to true when omitted, so silence would advertise it
 - Returning standard claims according to the `claims` parameter
 - A history of previously approved RPs
