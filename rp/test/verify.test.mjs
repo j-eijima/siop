@@ -1,9 +1,9 @@
-// Verifies a real, Swift-signed ID Token with the RP's JavaScript
-// implementation of OpenID Connect Core Section 7.5.
+// Verifies real ID Tokens signed by the other implementations, using the RP's
+// JavaScript implementation of OpenID Connect Core Section 7.5.
 //
-// The token is a committed fixture produced by `ios/SIOPKit`'s siop-issue, so
-// this suite needs nothing but Node. Checking against a live Swift build is
-// `cross-implementation.test.mjs`.
+// The tokens are committed fixtures produced by each implementation's
+// siop-issue, so this suite needs nothing but Node. Checking against a live
+// build is `cross-implementation.test.mjs`.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -15,12 +15,19 @@ import { jwkThumbprint, verifySelfIssuedIDToken } from "../public/siop-verify.js
 import { AUDIENCE, NONCE, checkFor, describeIssuedToken } from "./shared.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const fixture = JSON.parse(readFileSync(resolve(here, "fixtures/swift-issued.json"), "utf8"));
+const fixture = (name) => JSON.parse(readFileSync(resolve(here, `fixtures/${name}`), "utf8"));
 
-describeIssuedToken("Swift が署名した ID Token (フィクスチャ)", async () => ({
-  idToken: fixture.id_token,
-  expectedSubject: fixture.sub,
-}));
+// Every implementation that issues tokens is checked here, so that none is
+// only ever verified by itself.
+for (const [implementation, file] of [
+  ["Swift (ios/SIOPKit)", "swift-issued.json"],
+  ["Kotlin (android/siopkit)", "kotlin-issued.json"],
+]) {
+  describeIssuedToken(`${implementation} が署名した ID Token (フィクスチャ)`, async () => {
+    const issued = fixture(file);
+    return { idToken: issued.id_token, expectedSubject: issued.sub };
+  });
+}
 
 describe("形式が壊れたトークン", () => {
   it("形式チェックで止まる", async () => {

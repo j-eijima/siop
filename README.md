@@ -28,7 +28,7 @@ cross-platform languages are optional additions.
 | Order | | Language | State |
 |---|---|---|---|
 | 1 | [ios/](ios/) | Swift | ✅ SIOPKit (core) + SIOPApp (receives `openid:`) |
-| 2 | `android/` | Kotlin | Not started |
+| 2 | [android/](android/) | Kotlin | ✅ siopkit (core); sample app not started |
 | 3 | `cross_platform/flutter/` | Dart | Not started |
 | 4 | `windows/` | C# | Not started |
 | 5 | `macos/` | Swift | Not started |
