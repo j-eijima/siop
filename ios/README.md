@@ -56,7 +56,15 @@ xcodebuild -project SIOPApp.xcodeproj -scheme SIOPApp \
 3. **応答** — 承認で ID Token を発行し `redirect_uri#id_token=...&state=...` を開く。
    拒否時は Section 3.1.2.6 に従い `#error=access_denied` を返す
 
-### 動作確認
+### RP と合わせた動作確認
+
+`rp/` のテスト RP を起動すると、リクエスト送信から ID Token の検証まで一通り試せる。
+
+```
+python3 ../rp/serve.py     # 別ターミナルで
+```
+
+### 単体での動作確認
 
 ```
 xcrun simctl openurl booted "openid://?response_type=id_token\
@@ -65,7 +73,8 @@ xcrun simctl openurl booted "openid://?response_type=id_token\
 ```
 
 UI テスト(`UITests/`)は `XCUIApplication.open(_:)` で同じ経路を再現し、同意 → 承認 /
-拒否 / 不正リクエストの各画面を検証する。
+拒否 / 不正リクエストの各画面を検証する。`EndToEndRPTests` は Safari 上の `rp/` から
+リクエストを送り、検証成功まで到達することを確認する(RP サーバの起動が前提)。
 
 ## TODO
 

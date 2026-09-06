@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIOP テスト RP — 検証結果</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>検証結果</h1>
+  <p class="lede">
+    フラグメントで受け取った応答を、Section 7.5 の手順どおりに検証します。
+    ID Token はサーバに送信されず、このページ内で完結します。
+  </p>
+
+  <div class="card" id="summary"></div>
+
+  <h2>送信したリクエスト</h2>
+  <div class="card"><table class="params" id="request"></table></div>
+
+  <h2>受け取った応答</h2>
+  <div class="card"><table class="params" id="response"></table></div>
+
+  <div id="details" hidden>
+    <h2>検証項目</h2>
+    <div class="card"><ul class="checks" id="checks"></ul></div>
+
+    <h2>JOSE ヘッダ</h2>
+    <div class="card"><pre id="header"></pre></div>
+
+    <h2>ID Token のクレーム</h2>
+    <div class="card"><table class="params" id="claims"></table></div>
+
+    <h2>ペイロード全体</h2>
+    <div class="card"><pre id="payload"></pre></div>
+  </div>
+
+  <div class="actions"><a class="button" href="index.html">最初に戻る</a></div>
+</main>
+<script type="module" src="callback.js"></script>
+</body>
+</html>

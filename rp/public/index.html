@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIOP テスト RP</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>SIOP テスト RP</h1>
+  <p class="lede">
+    Self-Issued OpenID Provider (OpenID Connect Core 1.0 7章) に認証リクエストを送り、
+    返ってきた ID Token をこのページ内で検証します。
+    各パラメータは編集できるので、仕様に反したリクエストを送ったときの OP の挙動も試せます。
+  </p>
+
+  <h2>認証リクエストのパラメータ</h2>
+  <div class="card">
+    <table class="params" id="params"></table>
+    <div class="actions">
+      <button class="secondary" type="button" id="addParam">パラメータを追加</button>
+      <button class="secondary" type="button" id="regenerate">nonce / state を再生成</button>
+      <button class="secondary" type="button" id="reset">既定値に戻す</button>
+    </div>
+  </div>
+
+  <div id="warnings" hidden>
+    <h2>仕様との差分</h2>
+    <div class="card"><ul class="checks" id="warningList"></ul></div>
+  </div>
+
+  <h2>送信する認証リクエスト</h2>
+  <div class="card"><pre id="requestURL"></pre></div>
+
+  <p class="note">
+    nonce と state は localStorage に控え、コールバック側で照合します。
+    実機で試す場合は Mac の LAN アドレスでこのページを開いてください
+    (client_id / redirect_uri の既定値は開いている URL から作られます)。
+  </p>
+  <p class="note">
+    <strong>既定のブラウザで開いてください。</strong>
+    OP は <code>redirect_uri</code> を開くだけで、リクエストを始めたブラウザを指定できません。
+    iOS は https を既定ブラウザに渡すため、別のブラウザで始めると応答が戻らず、
+    nonce / state の照合に失敗します。
+  </p>
+
+  <div class="sticky-actions">
+    <a class="button" id="startLink" href="#">SIOP アプリで認証する</a>
+    <button class="secondary" type="button" id="copy">URL をコピー</button>
+  </div>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
