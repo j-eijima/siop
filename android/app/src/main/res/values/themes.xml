@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose draws the whole UI, so the platform theme only has to supply a
+         window background that matches and stay out of the way. -->
+    <style name="Theme.Siop" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

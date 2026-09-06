@@ -1,4 +1,5 @@
 plugins {
+    `java-library`
     kotlin("jvm")
     kotlin("plugin.serialization")
 }
@@ -12,7 +13,9 @@ repositories {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    // api, not implementation: JsonObject appears in the public API, as the
+    // claims that SelfIssuedIdTokenValidator.validate returns.
+    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     testImplementation(kotlin("test"))
 }
 

@@ -58,9 +58,39 @@ both directions are covered:
 
 Refresh both fixtures with `rp/test/fixtures/regenerate.sh`, which needs Swift and a JDK.
 
+## app
+
+A Compose app that receives the `openid:` authorization endpoint.
+
+```
+./gradlew :app:assembleDebug
+./gradlew :app:connectedDebugAndroidTest   # needs a running emulator or device
+```
+
+### Screens and flow
+
+1. **Identity** — the `sub` this device presents (a JWK thumbprint), its public key, and the
+   Discovery metadata
+2. **Consent** — shown on receiving `openid://...`. It presents the requester
+   (`client_id` = `redirect_uri`), the requested scopes, and the `nonce` / `state`. A SIOP cannot
+   authenticate the RP, so the requester's URL is labelled unverified rather than dressed up as a
+   trusted identity
+3. **Response** — approving issues an ID Token and opens
+   `redirect_uri#id_token=...&state=...`. Refusing returns `#error=access_denied`, as
+   Section 3.1.2.6 prescribes
+
+The signing key lives in the Android Keystore (`SiopKeyStore`), so `sub` is the same on every
+launch and the private key never leaves the keystore.
+
+### Trying it
+
+```
+adb shell am start -a android.intent.action.VIEW \
+  -d "'openid://?response_type=id_token&client_id=https%3A%2F%2Fclient.example.org%2Fcb\
+&scope=openid%20profile&state=af0ifjsldkj&nonce=n-0S6_WzA2Mj'"
+```
+
 ## Not done yet
 
-- The sample app: receiving `openid://`, the consent screen, and returning the response. That
-  needs the Android SDK
-- Keys held in the Android Keystore
 - `request` / `request_uri` support (Request Object)
+- Returning standard claims according to the `claims` parameter

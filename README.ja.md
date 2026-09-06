@@ -25,7 +25,7 @@ Self-Issued OpenID Provider (SIOP) は、認証サーバを置かずに端末自
 | 順 | | 言語 | 状態 |
 |---|---|---|---|
 | 1 | [ios/](ios/) | Swift | ✅ SIOPKit(コア)+ SIOPApp(`openid:` を受けるアプリ) |
-| 2 | [android/](android/) | Kotlin | ✅ siopkit(コア)。サンプルアプリは未着手 |
+| 2 | [android/](android/) | Kotlin | ✅ siopkit(コア)+ app(`openid:` を受けるアプリ) |
 | 3 | `cross_platform/flutter/` | Dart | 未着手 |
 | 4 | `windows/` | C# | 未着手 |
 | 5 | `macos/` | Swift | 未着手 |

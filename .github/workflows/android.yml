@@ -20,6 +20,11 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - name: gradle test
+      # The wrapper pins Gradle: the Android plugin does not work on every
+      # version, and the machine's Gradle is not necessarily one it accepts.
+      - name: siopkit tests
         working-directory: android
-        run: gradle :siopkit:test --console=plain
+        run: ./gradlew :siopkit:test --console=plain
+      - name: Build the app
+        working-directory: android
+        run: ./gradlew :app:assembleDebug --console=plain

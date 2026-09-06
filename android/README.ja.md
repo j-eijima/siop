@@ -56,8 +56,36 @@ gradle :siop-issue:run --args="openid://?response_type=id_token&client_id=...&sc
 
 フィクスチャの更新は `rp/test/fixtures/regenerate.sh`(Swift と JDK が必要)。
 
+## app
+
+`openid:` 認証エンドポイントを受け取る Compose アプリ。
+
+```
+./gradlew :app:assembleDebug
+./gradlew :app:connectedDebugAndroidTest   # エミュレータか実機が必要
+```
+
+### 画面と流れ
+
+1. **識別子画面** — この端末が提示する `sub`(JWK サムプリント)、公開鍵、Discovery メタデータ
+2. **同意画面** — `openid://...` を受け取ると表示。要求元(`client_id` = `redirect_uri`)、
+   要求 scope、`nonce` / `state` を提示する。SIOP は RP を認証できないため、要求元 URL は
+   「検証されていない」と明示している
+3. **応答** — 承認で ID Token を発行し `redirect_uri#id_token=...&state=...` を開く。
+   拒否時は Section 3.1.2.6 に従い `#error=access_denied` を返す
+
+署名鍵は Android Keystore に置く(`SiopKeyStore`)。`sub` が起動をまたいで同じになり、
+秘密鍵はキーストアの外に出ない。
+
+### 動作確認
+
+```
+adb shell am start -a android.intent.action.VIEW \
+  -d "'openid://?response_type=id_token&client_id=https%3A%2F%2Fclient.example.org%2Fcb\
+&scope=openid%20profile&state=af0ifjsldkj&nonce=n-0S6_WzA2Mj'"
+```
+
 ## まだ無いもの
 
-- サンプルアプリ — `openid://` の受け取り、同意画面、応答の返却。Android SDK が要る
-- Android Keystore での鍵保持
 - `request` / `request_uri`(Request Object)対応
+- claims パラメータに応じた標準クレームの応答
