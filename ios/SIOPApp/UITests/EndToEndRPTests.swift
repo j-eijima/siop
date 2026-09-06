@@ -23,7 +23,10 @@ final class EndToEndRPTests: XCTestCase {
     }
 
     override func tearDown() {
-        attachScreenOnFailure()
+        attachScreenOnFailure(trees: [
+            "safari": safari,
+            "springboard": XCUIApplication(bundleIdentifier: "com.apple.springboard"),
+        ])
         super.tearDown()
     }
 

@@ -1,7 +1,12 @@
 import XCTest
 
-/// Drives the app through the `openid:` authorization endpoint the way an RP
-/// would (OpenID Connect Core 1.0 Section 7.3).
+/// Covers how the app handles a Section 7.3 request: the consent screen it
+/// shows, and the response it produces on approval or refusal.
+///
+/// The request is injected through a launch argument rather than opened as a
+/// URL, because `XCUIApplication.open(_:)` delivers the URL on some iOS
+/// versions and merely launches the app on others. That the real `openid:`
+/// route works is the job of `EndToEndRPTests`, which goes through Safari.
 final class AuthenticationFlowUITests: XCTestCase {
     private static let clientID = "https://client.example.org/cb"
 
@@ -12,7 +17,8 @@ final class AuthenticationFlowUITests: XCTestCase {
 
     private func launch(query: String) -> XCUIApplication {
         let app = XCUIApplication()
-        app.open(URL(string: "openid://?\(query)")!)
+        app.launchArguments = ["-siopRequestURL", "openid://?\(query)"]
+        app.launch()
         return app
     }
 
@@ -45,7 +51,7 @@ final class AuthenticationFlowUITests: XCTestCase {
     func testRequestShowsConsentScreen() {
         let app = launch(query: "response_type=id_token&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid%20profile&state=af0ifjsldkj&nonce=n-0S6_WzA2Mj")
 
-        XCTAssertTrue(waitForElement(app.staticTexts[Self.clientID]))
+        XCTAssertTrue(app.staticTexts[Self.clientID].waitForExistence(timeout: 20))
         XCTAssertTrue(text(containing: "openid", in: app).exists)
         XCTAssertTrue(text(containing: "profile", in: app).exists)
         XCTAssertTrue(text(containing: "n-0S6_WzA2Mj", in: app).exists)
@@ -57,7 +63,7 @@ final class AuthenticationFlowUITests: XCTestCase {
     func testApprovalIssuesTokenAndReportsSuccess() {
         let app = launch(query: "response_type=id_token&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid&nonce=n1")
 
-        XCTAssertTrue(waitForElement(app.buttons["この識別子で応答する"]))
+        XCTAssertTrue(app.buttons["この識別子で応答する"].waitForExistence(timeout: 20))
         app.buttons["この識別子で応答する"].tap()
 
         XCTAssertTrue(app.staticTexts["ID Token を返しました"].waitForExistence(timeout: 10))
@@ -69,7 +75,7 @@ final class AuthenticationFlowUITests: XCTestCase {
     func testDeclineReportsAccessDenied() {
         let app = launch(query: "response_type=id_token&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid&nonce=n1")
 
-        XCTAssertTrue(waitForElement(app.buttons["拒否する"]))
+        XCTAssertTrue(app.buttons["拒否する"].waitForExistence(timeout: 20))
         app.buttons["拒否する"].tap()
 
         XCTAssertTrue(app.staticTexts["リクエストを拒否しました"].waitForExistence(timeout: 10))
@@ -80,7 +86,7 @@ final class AuthenticationFlowUITests: XCTestCase {
         // Section 7.1: a Self-Issued OP supports only response_type=id_token.
         let app = launch(query: "response_type=code&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid&nonce=n1")
 
-        XCTAssertTrue(waitForElement(app.staticTexts["処理できませんでした"]))
+        XCTAssertTrue(app.staticTexts["処理できませんでした"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.staticTexts["未対応の response_type です: code"].exists)
         attachScreenshot(app, named: "rejected")
     }

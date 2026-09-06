@@ -54,6 +54,24 @@ final class AuthenticationSession: ObservableObject {
 
     // MARK: - Request handling
 
+#if DEBUG
+    /// Launch argument used by the UI tests to hand the app a request
+    /// directly. `XCUIApplication.open(_:)` does not deliver the URL on every
+    /// iOS version, and those tests are about the consent screen and the
+    /// response, not about URL routing — `EndToEndRPTests` covers the real
+    /// `openid:` route through Safari.
+    static let requestLaunchArgument = "-siopRequestURL"
+
+    func receiveLaunchRequestIfProvided() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let flag = arguments.firstIndex(of: Self.requestLaunchArgument),
+              arguments.index(after: flag) < arguments.endIndex,
+              let url = URL(string: arguments[arguments.index(after: flag)])
+        else { return }
+        receive(url)
+    }
+#endif
+
     func receive(_ url: URL) {
         do {
             phase = .consent(try AuthorizationRequest(url: url))

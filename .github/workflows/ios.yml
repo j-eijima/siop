@@ -44,6 +44,22 @@ jobs:
           xcrun simctl list devices available | grep -A20 '^-- iOS'
       - name: Install XcodeGen
         run: brew install xcodegen
+      # The runner's Xcode decides which simulators exist, so pick one that is
+      # actually there rather than hard-coding a device this repo was developed
+      # against.
+      - name: Select simulator
+        id: sim
+        run: |
+          NAME=$(xcrun simctl list devices available --json | python3 -c '
+          import json, re, sys
+          devices = json.load(sys.stdin)["devices"]
+          runtime = sorted(k for k in devices if "iOS" in k)[-1]
+          names = [d["name"] for d in devices[runtime] if d["name"].startswith("iPhone")]
+          plain = [n for n in names if re.fullmatch(r"iPhone \d+", n)]
+          print((plain or names)[-1])
+          ')
+          echo "Using $NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
       - name: Generate project
         working-directory: ios/SIOPApp
         run: xcodegen generate
@@ -63,7 +79,7 @@ jobs:
           xcodebuild test \
             -project SIOPApp.xcodeproj \
             -scheme SIOPApp \
-            -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}" \
             -resultBundlePath TestResults.xcresult
       # Carries the failure screenshots, which are the only way to tell an
       # undismissed system prompt from a genuinely broken screen.

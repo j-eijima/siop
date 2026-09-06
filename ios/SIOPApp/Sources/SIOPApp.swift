@@ -11,6 +11,9 @@ struct SIOPApp: App {
                 .environmentObject(session)
                 // Section 7.1: requests arrive at the `openid:` authorization endpoint.
                 .onOpenURL { session.receive($0) }
+#if DEBUG
+                .task { session.receiveLaunchRequestIfProvided() }
+#endif
         }
     }
 }

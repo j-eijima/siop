@@ -7,11 +7,18 @@ extension XCTestCase {
     /// to the simulator's language. The prompt lives in a SpringBoard alert
     /// when the URL comes from outside a browser, and in Safari's own in-page
     /// dialog (`SFDialogView`, not a UIAlert) when it comes from a link tap.
+    /// Where the prompt lives varies by iOS version, so try each container
+    /// that has been observed to host it, longest wait first.
     func confirmAppHandoffIfPresented(inPageDialogOf browser: XCUIApplication? = nil) {
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        if tapAffirmativeButton(of: springboard.alerts.firstMatch) { return }
+        var containers: [XCUIElement] = []
         if let browser {
-            _ = tapAffirmativeButton(of: browser.otherElements["SFDialogView"])
+            containers.append(browser.otherElements["SFDialogView"])
+            containers.append(browser.alerts.firstMatch)
+        }
+        containers.append(XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch)
+
+        for (index, container) in containers.enumerated() {
+            if tapAffirmativeButton(of: container, timeout: index == 0 ? 5 : 1) { return }
         }
     }
 
@@ -39,11 +46,18 @@ extension XCTestCase {
 
     /// Whatever is actually on screen when a test fails — the only way to tell
     /// an undismissed system prompt from a genuinely broken screen on CI.
-    func attachScreenOnFailure() {
+    func attachScreenOnFailure(trees: [String: XCUIApplication] = [:]) {
         guard testRun?.hasSucceeded == false else { return }
-        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = "failure-screen"
-        attachment.lifetime = .keepAlways
-        add(attachment)
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "failure-screen"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        for (name, app) in trees {
+            let dump = XCTAttachment(string: app.debugDescription)
+            dump.name = "failure-tree-\(name)"
+            dump.lifetime = .keepAlways
+            add(dump)
+        }
     }
 }
