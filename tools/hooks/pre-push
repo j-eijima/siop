@@ -2,6 +2,10 @@
 # Runs an adversarial Codex review over exactly what is about to be pushed, and
 # refuses the push unless it comes back approved.
 #
+# The reviewer compares a base against the checked-out HEAD. That shape can
+# only speak for a fast-forward of the current branch, so every other kind of
+# push is refused rather than waved through on a review that did not cover it.
+#
 # This cannot live in GitHub Actions: it drives the local Codex CLI under your
 # own credentials. It therefore only guards pushes from a machine where it is
 # installed — see tools/install-hooks.sh.
@@ -9,28 +13,47 @@
 # Bypass a single push with `git push --no-verify`.
 set -eu
 
-COMPANION="$HOME/.claude/plugins/cache/openai-codex/codex/1.0.6/scripts/codex-companion.mjs"
+DESTINATION="${2:-${1:-origin}}"
+COMPANION="${CODEX_COMPANION:-$HOME/.claude/plugins/cache/openai-codex/codex/1.0.6/scripts/codex-companion.mjs}"
 EMPTY_SHA="0000000000000000000000000000000000000000"
 
-if [ ! -f "$COMPANION" ]; then
-    echo "pre-push: Codex companion not found at $COMPANION" >&2
-    echo "pre-push: install the codex plugin, or push with --no-verify" >&2
+refuse() {
+    echo "pre-push: $1" >&2
+    echo "pre-push: push refused. Override deliberately with --no-verify." >&2
     exit 1
-fi
+}
 
-status=0
+[ -f "$COMPANION" ] || refuse "Codex companion not found at $COMPANION"
 
 # git feeds one line per ref being pushed: <local ref> <local sha> <remote ref> <remote sha>
 while read -r _local_ref local_sha _remote_ref remote_sha; do
-    # Deleting a branch pushes nothing to review.
+    # Deleting a branch pushes no content to review.
     [ "$local_sha" = "$EMPTY_SHA" ] && continue
 
+    if [ "$local_sha" != "$(git rev-parse HEAD)" ]; then
+        refuse "$local_sha is not the checked-out HEAD, so the review cannot cover it"
+    fi
+
     if [ "$remote_sha" = "$EMPTY_SHA" ]; then
-        # A branch the remote does not have yet: review it against the default
-        # branch, or against its root when there is nothing to compare to.
-        base=$(git merge-base "$local_sha" origin/main 2>/dev/null || true)
-        [ -n "$base" ] || base=$(git rev-list --max-parents=0 "$local_sha" | tail -1)
+        # A ref the destination does not have yet. The baseline has to come
+        # from what that destination actually advertises now — a local
+        # remote-tracking ref can name a commit another destination never had,
+        # or one a rewind has since removed. The root commit is not a baseline
+        # either: using it would exclude everything it introduced.
+        base=""
+        for candidate in $(git ls-remote --heads "$DESTINATION" 2>/dev/null | cut -f1); do
+            git cat-file -e "$candidate^{commit}" 2>/dev/null || continue
+            git merge-base --is-ancestor "$candidate" "$local_sha" 2>/dev/null || continue
+            if [ -z "$base" ] || git merge-base --is-ancestor "$base" "$candidate" 2>/dev/null; then
+                base="$candidate"
+            fi
+        done
+        [ -n "$base" ] || refuse "$DESTINATION advertises no reviewed baseline for this ref"
     else
+        # A force push can remove commits from the remote, and a base..HEAD
+        # comparison cannot show what is being discarded.
+        git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null ||
+            refuse "this is not a fast-forward, so the review cannot show what it removes"
         base="$remote_sha"
     fi
 
@@ -39,36 +62,26 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         continue
     fi
 
-    # The reviewer compares against the checked-out HEAD, so it can only speak
-    # for the commits being pushed when they are the ones checked out. Pushing
-    # some other ref would otherwise be approved on the strength of a review of
-    # something else.
-    if [ "$local_sha" != "$(git rev-parse HEAD)" ]; then
-        echo "pre-push: $local_sha is not the checked-out HEAD." >&2
-        echo "pre-push: the review can only cover HEAD, so this push is refused." >&2
-        echo "pre-push: check out what you are pushing, or push with --no-verify." >&2
-        exit 1
-    fi
-
     count=$(git rev-list --count "$base..$local_sha")
     echo "pre-push: reviewing $count commit(s) against $(git rev-parse --short "$base")..."
 
-    output=$(node "$COMPANION" adversarial-review --wait --base "$base" 2>&1) || status=$?
-    printf '%s\n' "$output"
+    # --json so the verdict is read from the structured result. Progress goes
+    # to the terminal on stderr; only the payload is captured.
+    payload=$(node "$COMPANION" adversarial-review --wait --json --base "$base") ||
+        refuse "the review did not complete"
 
-    if [ "$status" -ne 0 ]; then
-        echo "pre-push: the review did not complete. Push refused." >&2
-        exit "$status"
-    fi
+    # Compared against the sha being pushed, not against a HEAD read later:
+    # anything between the first check and here could have moved it, and the
+    # verdict has to bind to the commit git is about to send. Detecting a move
+    # is not preventing one — an interleaving that moves HEAD away and back
+    # would go unseen — but it stops an approval of one tree from authorising
+    # another.
+    [ "$(git rev-parse HEAD)" = "$local_sha" ] ||
+        refuse "HEAD moved while the review ran, so its verdict does not cover $local_sha"
 
-    # The verdict line is what decides; a review that ran but found problems
-    # still exits zero.
-    if ! printf '%s' "$output" | grep -qi '^Verdict: *approve'; then
-        echo >&2
-        echo "pre-push: the review did not approve these changes. Push refused." >&2
-        echo "pre-push: address the findings, or push with --no-verify to override." >&2
-        exit 1
-    fi
+    # The verdict decides: a review that ran but found problems still exits zero.
+    printf '%s' "$payload" | node "$(dirname "$0")/review-verdict.mjs" ||
+        refuse "the review did not approve these changes"
 done
 
 echo "pre-push: approved."

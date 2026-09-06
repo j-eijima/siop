@@ -97,6 +97,13 @@ your own credentials, so it cannot run in CI, and it only guards pushes from a m
 is installed. Hooks are not cloned, so run this once per clone. Override a single push with
 `git push --no-verify`.
 
+The reviewer compares a base against the checked-out HEAD, which can only speak for a
+fast-forward of the current branch. Anything else — a force push, a ref that is not checked out,
+a new branch with no reviewed baseline on the remote — is refused rather than approved on a
+review that did not cover it. `tools/test-pre-push.sh` checks those decisions against a scratch
+repository with the reviewer stubbed, because the way a gate fails is by letting something
+through unreviewed.
+
 ## Documentation
 
 English and Japanese are both supported. Every directory that documents itself carries
