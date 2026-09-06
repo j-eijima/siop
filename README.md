@@ -15,18 +15,26 @@ Party without anyone having registered or issued an identifier for them.
 Each OS is implemented in its own default language, and every implementation is checked against
 one shared Relying Party.
 
+## What this produces
+
+- An SDK for using SIOP, with documentation
+- A sample app that actually works
+
 ## Status
 
-| | Language | State |
-|---|---|---|
-| [ios/](ios/) | Swift | ✅ SIOPKit (core) + SIOPApp (receives `openid:`) |
-| `android/` | Kotlin | Not started |
-| `cross_platform/flutter/` | Dart | Not started |
-| `windows/` | C# | Not started |
-| `macos/` | Swift | Not started |
-| `cross_platform/rust/` | Rust | Not started |
-| `linux/` | — | Not started |
-| [rp/](rp/) | JavaScript | ✅ Test Relying Party shared by every implementation |
+Implementations are taken in the order below. Each OS uses its default language first;
+cross-platform languages are optional additions.
+
+| Order | | Language | State |
+|---|---|---|---|
+| 1 | [ios/](ios/) | Swift | ✅ SIOPKit (core) + SIOPApp (receives `openid:`) |
+| 2 | `android/` | Kotlin | Not started |
+| 3 | `cross_platform/flutter/` | Dart | Not started |
+| 4 | `windows/` | C# | Not started |
+| 5 | `macos/` | Swift | Not started |
+| 6 | `cross_platform/rust/` | Rust | Not started |
+| 7 | `linux/` | — | Not started |
+| — | [rp/](rp/) | JavaScript | ✅ Test Relying Party shared by every implementation |
 
 ## What the spec asks for
 
@@ -76,3 +84,9 @@ produced the token.
 
 A new implementation counts as minimally conformant once authentication succeeds against the RP
 in `rp/`.
+
+## Documentation
+
+English and Japanese are both supported, and every `*.md` here exists in both. `CLAUDE.md` is the
+exception: it instructs the coding agent rather than documenting the project, in the same way
+that `.gitignore` and `project.yml` are not translated either.

@@ -12,18 +12,26 @@ Self-Issued OpenID Provider (SIOP) は、認証サーバを置かずに端末自
 
 各 OS のデファクト言語で実装し、共通の RP で相互に検証する。
 
+## 作るもの
+
+- SIOP を利用するための SDK(ドキュメント込み)
+- 実稼働するサンプルアプリ
+
 ## 実装状況
 
-| | 言語 | 状態 |
-|---|---|---|
-| [ios/](ios/) | Swift | ✅ SIOPKit(コア)+ SIOPApp(`openid:` を受けるアプリ) |
-| `android/` | Kotlin | 未着手 |
-| `cross_platform/flutter/` | Dart | 未着手 |
-| `windows/` | C# | 未着手 |
-| `macos/` | Swift | 未着手 |
-| `cross_platform/rust/` | Rust | 未着手 |
-| `linux/` | — | 未着手 |
-| [rp/](rp/) | JavaScript | ✅ 全実装共通のテスト用 Relying Party |
+下の順に実装する。各 OS はデファクト言語を第一に採用し、クロスプラットフォーム言語は
+オプショナルで追加する。
+
+| 順 | | 言語 | 状態 |
+|---|---|---|---|
+| 1 | [ios/](ios/) | Swift | ✅ SIOPKit(コア)+ SIOPApp(`openid:` を受けるアプリ) |
+| 2 | `android/` | Kotlin | 未着手 |
+| 3 | `cross_platform/flutter/` | Dart | 未着手 |
+| 4 | `windows/` | C# | 未着手 |
+| 5 | `macos/` | Swift | 未着手 |
+| 6 | `cross_platform/rust/` | Rust | 未着手 |
+| 7 | `linux/` | — | 未着手 |
+| — | [rp/](rp/) | JavaScript | ✅ 全実装共通のテスト用 Relying Party |
 
 ## 仕様との対応
 
@@ -70,3 +78,9 @@ cd rp && node --test
   他言語の実装を足すときは、まずこの CLI の出力を自分の検証器に通すところから始められる
 
 新しい実装を追加するときは、`rp/` の RP で認証が通ることをもって最低限の適合とする。
+
+## ドキュメント
+
+対応自然言語は英語と日本語で、ここにある `*.md` はすべて両方で用意する。`CLAUDE.md` だけは
+例外で、プロジェクトのドキュメントではなくコーディングエージェントへの指示なので翻訳しない
+(`.gitignore` や `project.yml` を翻訳しないのと同じ)。
