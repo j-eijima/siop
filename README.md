@@ -47,8 +47,8 @@ cd ios/SIOPApp && xcodegen generate
 xcodebuild -project SIOPApp.xcodeproj -scheme SIOPApp \
   -destination 'platform=iOS Simulator,name=iPhone 17' test
 
-# 実装間テスト: Swift が署名したトークンを JavaScript で検証
-cd rp && node --test test/verify.test.mjs
+# RP の検証ロジック (Node だけで動く)
+cd rp && node --test
 ```
 
 ## 実装間の一致をどう確かめるか
@@ -56,7 +56,10 @@ cd rp && node --test test/verify.test.mjs
 実装が増えるほど、各実装が「自分の中では正しい」状態に留まりやすくなる。それを防ぐため、
 検証は必ず別の実装に渡して行う。
 
-- `rp/test/verify.test.mjs` — Swift (SIOPKit) が署名した ID Token を JavaScript が検証する
+- `rp/test/verify.test.mjs` — Swift (SIOPKit) が署名した実物の ID Token を JavaScript が検証する。
+  トークンはフィクスチャとしてコミットしてあるので、Swift の無い環境でも走る
+- `rp/test/cross-implementation.test.mjs` — 同じ検証をその時点の Swift ビルドの出力に対して行い、
+  フィクスチャが古くなって後退を見逃すのを防ぐ(Swift が無ければ自動でスキップ)
 - `ios/SIOPApp/UITests/EndToEndRPTests.swift` — Safari 上の RP からアプリを起動し、
   発行されたトークンが RP で検証されるまでを通す
 - `ios/SIOPKit` の `siop-issue` CLI が、任意のリクエストに対するトークンを吐く。

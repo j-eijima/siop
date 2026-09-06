@@ -17,6 +17,21 @@ jobs:
         working-directory: ios/SIOPKit
         run: swift test
 
+  cross-implementation:
+    # Verifies a token from the *current* Swift build with the RP's JavaScript
+    # implementation, so an interoperability regression cannot hide behind the
+    # committed fixture. Lives here because this is where Swift is installed.
+    name: 実装間テスト (Swift が署名 → JavaScript が検証)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: node --test
+        working-directory: rp
+        run: node --test
+
   app:
     name: SIOPApp UI tests
     runs-on: macos-15

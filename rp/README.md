@@ -50,12 +50,19 @@ ID Token の各クレームを同じ形式で並べる。
 ## テスト
 
 ```
-node --test test/verify.test.mjs
+node --test
 ```
 
-Swift (`ios/SIOPKit`) が署名した ID Token を、この JavaScript 実装で検証する実装間テスト。
-改竄・aud 不一致・nonce 不一致・期限切れが正しく弾かれることも確認する。
-`swift run siop-issue` を呼ぶため Swift ツールチェインが必要。
+Node だけあれば動く。依存パッケージは無い。
+
+- `test/verify.test.mjs` — Swift (`ios/SIOPKit`) が署名した実物の ID Token
+  (`test/fixtures/swift-issued.json`)を検証する。改竄・aud 不一致・nonce 不一致・
+  期限切れが正しく弾かれることも確認する
+- `test/cross-implementation.test.mjs` — 同じ検証を、**その時点の** Swift ビルドが発行した
+  トークンに対して行う。フィクスチャが古くなって相互運用性の後退を見逃すのを防ぐ。
+  Swift が無い環境では自動でスキップされる
+
+フィクスチャの更新は `test/fixtures/regenerate.sh`(Swift が必要)。
 
 iOS アプリまで含めた end-to-end テストは
 `ios/SIOPApp/UITests/EndToEndRPTests.swift`(このサーバの起動が前提)。

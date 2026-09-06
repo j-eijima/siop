@@ -3,16 +3,17 @@ name: RP
 on:
   push:
     branches: [main]
-    paths: ['rp/**', 'ios/SIOPKit/**', '.github/workflows/rp.yml']
+    paths: ['rp/**', '.github/workflows/rp.yml']
   pull_request:
-    paths: ['rp/**', 'ios/SIOPKit/**', '.github/workflows/rp.yml']
+    paths: ['rp/**', '.github/workflows/rp.yml']
 
 jobs:
-  cross-implementation:
-    # Tokens are signed by the Swift implementation and verified by the
-    # JavaScript one, so this needs both toolchains.
-    name: 実装間テスト (Swift が署名 → JavaScript が検証)
-    runs-on: macos-15
+  verify:
+    # Runs against the committed Swift-issued fixture, so no Swift toolchain
+    # and no macOS runner is needed. The live cross-implementation suite skips
+    # itself here and runs in the iOS workflow instead.
+    name: 検証ロジック
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,4 +21,4 @@ jobs:
           node-version: '22'
       - name: node --test
         working-directory: rp
-        run: node --test test/verify.test.mjs
+        run: node --test
