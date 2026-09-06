@@ -104,6 +104,12 @@ review that did not cover it. `tools/test-pre-push.sh` checks those decisions ag
 repository with the reviewer stubbed, because the way a gate fails is by letting something
 through unreviewed.
 
+Nothing in the gate is specific to this project. To use it elsewhere, copy `tools/hooks/`,
+`tools/install-hooks.sh` and `tools/test-pre-push.sh`; they need only git, node and sh. The
+companion is located by taking `codex.companion` from git config when set, and otherwise the
+newest version installed — a pinned path would turn the next plugin update into a gate that
+refuses every push.
+
 ## Documentation
 
 English and Japanese are both supported. Every directory that documents itself carries

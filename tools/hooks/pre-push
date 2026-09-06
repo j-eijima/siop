@@ -14,7 +14,6 @@
 set -eu
 
 DESTINATION="${2:-${1:-origin}}"
-COMPANION="${CODEX_COMPANION:-$HOME/.claude/plugins/cache/openai-codex/codex/1.0.6/scripts/codex-companion.mjs}"
 EMPTY_SHA="0000000000000000000000000000000000000000"
 
 refuse() {
@@ -23,7 +22,27 @@ refuse() {
     exit 1
 }
 
-[ -f "$COMPANION" ] || refuse "Codex companion not found at $COMPANION"
+# The plugin installs under a versioned directory, so pinning a version here
+# would turn the next plugin update into a gate that refuses every push. Take
+# an explicit setting when there is one, otherwise the newest installed.
+find_companion() {
+    if [ -n "${CODEX_COMPANION:-}" ]; then
+        printf '%s' "$CODEX_COMPANION"
+        return
+    fi
+    configured=$(git config --get codex.companion || true)
+    if [ -n "$configured" ]; then
+        printf '%s' "$configured"
+        return
+    fi
+    ls -d "$HOME"/.claude/plugins/cache/openai-codex/codex/*/scripts/codex-companion.mjs 2>/dev/null |
+        sort -V | tail -1
+}
+
+COMPANION=$(find_companion)
+[ -n "$COMPANION" ] && [ -f "$COMPANION" ] || refuse "no Codex companion found.
+pre-push:   Install the codex plugin, or point at it with:
+pre-push:     git config codex.companion <path to codex-companion.mjs>"
 
 # git feeds one line per ref being pushed: <local ref> <local sha> <remote ref> <remote sha>
 while read -r _local_ref local_sha _remote_ref remote_sha; do

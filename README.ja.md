@@ -96,6 +96,12 @@ clone ごとに一度実行する。個別に無視する場合は `git push --n
 `tools/test-pre-push.sh` がレビュアをスタブ化した使い捨てリポジトリで検査する。ゲートの壊れ方は
 「レビューされないものを通してしまう」ことなので。
 
+このゲートにプロジェクト固有の部分は無い。他で使うときは `tools/hooks/`、
+`tools/install-hooks.sh`、`tools/test-pre-push.sh` をコピーすればよく、必要なのは git・node・sh
+だけ。companion の場所は、git config の `codex.companion` があればそれを、無ければ導入済みの
+最新版を使う。パスにバージョンを固定すると、プラグイン更新のたびに全 push を止めるゲートに
+なってしまうため。
+
 ## ドキュメント
 
 対応自然言語は英語と日本語。自身を説明するディレクトリにはそれぞれ `README.md` と

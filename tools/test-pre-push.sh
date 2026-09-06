@@ -47,7 +47,7 @@ run_hook() {
     (
         cd "$WORK/repo"
         echo "$1" | env \
-            CODEX_COMPANION="$STUB" \
+            CODEX_COMPANION="${COMPANION_OVERRIDE-$STUB}" \
             REVIEW_LOG="$WORK/reviews" \
             VERDICT_FILE="$VERDICT_FILE" \
             MUTATE_DURING_REVIEW="${MUTATE_DURING_REVIEW:-}" \
@@ -132,6 +132,27 @@ MUTATE_DURING_REVIEW="git -C $WORK/repo commit -q --allow-empty -m moved" \
     run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" && rc=0 || rc=$?
 check "HEAD moving during the review is refused" "1" "$rc"
 git -C "$WORK/repo" reset -q --hard "$HEAD_SHA"
+
+# Locating the companion: the plugin lives under a versioned directory, so a
+# pinned path would make the next update refuse every push.
+FAKE_HOME="$WORK/home"
+for version in 1.0.6 1.0.10 1.0.9; do
+    mkdir -p "$FAKE_HOME/.claude/plugins/cache/openai-codex/codex/$version/scripts"
+    cp "$STUB" "$FAKE_HOME/.claude/plugins/cache/openai-codex/codex/$version/scripts/codex-companion.mjs"
+done
+echo "console.log(JSON.stringify({codex:{status:0},result:{verdict:'approve',summary:'newest'}}))" \
+    > "$FAKE_HOME/.claude/plugins/cache/openai-codex/codex/1.0.10/scripts/codex-companion.mjs"
+
+: > "$WORK/reviews"
+COMPANION_OVERRIDE="" HOME="$FAKE_HOME" \
+    run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" && rc=0 || rc=$?
+check "the newest installed companion is used" "0" "$rc"
+grep -q "newest" "$WORK/out" && found=yes || found=no
+check "  ...1.0.10 rather than 1.0.6" "yes" "$found"
+
+COMPANION_OVERRIDE="" HOME="$WORK/empty-home" \
+    run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" && rc=0 || rc=$?
+check "no companion installed is refused, not ignored" "1" "$rc"
 
 echo
 [ "$failures" -eq 0 ] && echo "all checks passed" || echo "$failures check(s) failed"
