@@ -36,4 +36,7 @@ https://openid-foundation-japan.github.io/openid-connect-core-1_0.ja.html#SelfIs
   + cross_platform
     + flutter
     + rust
+  + rp
   - CLAUDE.md
+
+rp は各OS実装の動作確認に使う、SIOP 対応のテスト用 Relying Party(OS 横断)。
