@@ -5,6 +5,11 @@ import XCTest
 final class AuthenticationFlowUITests: XCTestCase {
     private static let clientID = "https://client.example.org/cb"
 
+    override func tearDown() {
+        attachScreenOnFailure()
+        super.tearDown()
+    }
+
     private func launch(query: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.open(URL(string: "openid://?\(query)")!)
@@ -40,7 +45,7 @@ final class AuthenticationFlowUITests: XCTestCase {
     func testRequestShowsConsentScreen() {
         let app = launch(query: "response_type=id_token&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid%20profile&state=af0ifjsldkj&nonce=n-0S6_WzA2Mj")
 
-        XCTAssertTrue(app.staticTexts[Self.clientID].waitForExistence(timeout: 10))
+        XCTAssertTrue(waitForElement(app.staticTexts[Self.clientID]))
         XCTAssertTrue(text(containing: "openid", in: app).exists)
         XCTAssertTrue(text(containing: "profile", in: app).exists)
         XCTAssertTrue(text(containing: "n-0S6_WzA2Mj", in: app).exists)
@@ -52,7 +57,7 @@ final class AuthenticationFlowUITests: XCTestCase {
     func testApprovalIssuesTokenAndReportsSuccess() {
         let app = launch(query: "response_type=id_token&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid&nonce=n1")
 
-        XCTAssertTrue(app.buttons["この識別子で応答する"].waitForExistence(timeout: 10))
+        XCTAssertTrue(waitForElement(app.buttons["この識別子で応答する"]))
         app.buttons["この識別子で応答する"].tap()
 
         XCTAssertTrue(app.staticTexts["ID Token を返しました"].waitForExistence(timeout: 10))
@@ -64,7 +69,7 @@ final class AuthenticationFlowUITests: XCTestCase {
     func testDeclineReportsAccessDenied() {
         let app = launch(query: "response_type=id_token&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid&nonce=n1")
 
-        XCTAssertTrue(app.buttons["拒否する"].waitForExistence(timeout: 10))
+        XCTAssertTrue(waitForElement(app.buttons["拒否する"]))
         app.buttons["拒否する"].tap()
 
         XCTAssertTrue(app.staticTexts["リクエストを拒否しました"].waitForExistence(timeout: 10))
@@ -75,7 +80,7 @@ final class AuthenticationFlowUITests: XCTestCase {
         // Section 7.1: a Self-Issued OP supports only response_type=id_token.
         let app = launch(query: "response_type=code&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid&nonce=n1")
 
-        XCTAssertTrue(app.staticTexts["処理できませんでした"].waitForExistence(timeout: 10))
+        XCTAssertTrue(waitForElement(app.staticTexts["処理できませんでした"]))
         XCTAssertTrue(app.staticTexts["未対応の response_type です: code"].exists)
         attachScreenshot(app, named: "rejected")
     }

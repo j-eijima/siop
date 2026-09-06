@@ -37,6 +37,11 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      # UI tests depend on what the runner actually provides, so record it.
+      - name: Toolchain と シミュレータ
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available | grep -A20 '^-- iOS'
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate project
@@ -58,4 +63,13 @@ jobs:
           xcodebuild test \
             -project SIOPApp.xcodeproj \
             -scheme SIOPApp \
-            -destination 'platform=iOS Simulator,name=iPhone 17'
+            -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -resultBundlePath TestResults.xcresult
+      # Carries the failure screenshots, which are the only way to tell an
+      # undismissed system prompt from a genuinely broken screen.
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: ios/SIOPApp/TestResults.xcresult

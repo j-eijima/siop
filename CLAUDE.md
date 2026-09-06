@@ -6,13 +6,18 @@ https://openid-foundation-japan.github.io/openid-connect-core-1_0.ja.html#SelfIs
   - ドキュメント
 - 実稼働するサンプルアプリ
 
+# 対応自然言語
+- 英語
+- 日本語
+※各種ドキュメント(*.md)は対応言語すべてで作成すること
+
 # 対応OS
 - iOS
 - Android
 - Windows
 - Mac OS
 
-# 使用言語
+# プログラミング言語
 実装OSごとのデファクト言語を第一に採用し実装
 
 クロスプラットフォーム言語はオプショナルで採用し実装（Flutter(iOS/Androidクロスプラットフォーム、Rust(Winodws/Mac OSクロスプラットフォーム))

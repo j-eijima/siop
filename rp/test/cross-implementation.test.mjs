@@ -3,8 +3,11 @@
 // SIOPKit that breaks interoperability is caught rather than papered over by a
 // stale fixture.
 //
-// Needs a Swift toolchain; skipped automatically when `swift` is unavailable,
-// which keeps `node --test test/` runnable anywhere.
+// Needs a working SIOPKit build; skipped automatically when one is not
+// available, which keeps `node --test` runnable anywhere. Note that the
+// presence of a `swift` binary is not enough to go on: GitHub's Linux runners
+// ship Swift, but SIOPKit builds on Security and CryptoKit and so only builds
+// on Apple platforms. The probe therefore issues a token for real.
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -18,34 +21,39 @@ import { AUDIENCE, NONCE, claimsOf, describeIssuedToken } from "./shared.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const packagePath = resolve(here, "../../ios/SIOPKit");
 
-function swiftAvailable() {
+const issue = () => {
+  const params = new URLSearchParams({
+    response_type: "id_token",
+    client_id: AUDIENCE,
+    scope: "openid",
+    nonce: NONCE,
+    state: "st1",
+  });
+  return JSON.parse(execFileSync(
+    "swift",
+    ["run", "--package-path", packagePath, "siop-issue", `openid://?${params}`],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+  ));
+};
+
+/// Can this machine actually get a token out of SIOPKit? Building it is the
+/// only honest answer, so the probe does exactly that.
+function unavailableReason() {
   try {
-    execFileSync("swift", ["--version"], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
+    issue();
+    return null;
+  } catch (error) {
+    return `SIOPKit をビルドできません (${error.code ?? error.message})`;
   }
 }
 
-if (!swiftAvailable()) {
-  describe("現在の Swift 実装との突き合わせ", { skip: "Swift ツールチェインがありません" }, () => {
+const skipReason = unavailableReason();
+
+if (skipReason) {
+  describe("現在の Swift 実装との突き合わせ", { skip: skipReason }, () => {
     it("skipped", () => {});
   });
 } else {
-  const issue = () => {
-    const params = new URLSearchParams({
-      response_type: "id_token",
-      client_id: AUDIENCE,
-      scope: "openid",
-      nonce: NONCE,
-      state: "st1",
-    });
-    return JSON.parse(execFileSync(
-      "swift",
-      ["run", "--package-path", packagePath, "siop-issue", `openid://?${params}`],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] },
-    ));
-  };
 
   describeIssuedToken("現在の Swift 実装が発行した ID Token", async () => {
     const issued = issue();

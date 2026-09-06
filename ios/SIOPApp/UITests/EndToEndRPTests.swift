@@ -16,11 +16,15 @@ final class EndToEndRPTests: XCTestCase {
     private static let rpURL = URL(string: "http://localhost:8080/index.html")!
 
     private let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
-    private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
 
     override func setUpWithError() throws {
         try skipUnlessRPIsRunning()
         continueAfterFailure = false
+    }
+
+    override func tearDown() {
+        attachScreenOnFailure()
+        super.tearDown()
     }
 
     private func skipUnlessRPIsRunning() throws {
@@ -41,27 +45,6 @@ final class EndToEndRPTests: XCTestCase {
         shot.name = name
         shot.lifetime = .keepAlways
         add(shot)
-    }
-
-    /// iOS asks for confirmation before handing a URL to another app. A tap on
-    /// a link is confirmed in Safari's own in-page dialog (`SFDialogView`,
-    /// which is not a UIAlert); a URL opened from elsewhere is confirmed in a
-    /// SpringBoard alert. Only reached while the prompt holds the foreground.
-    private func confirmHandoffIfAsked() {
-        let inPage = safari.otherElements["SFDialogView"].buttons["開く"]
-        if inPage.waitForExistence(timeout: 5) {
-            inPage.tap()
-            return
-        }
-        let systemAlert = springboard.alerts.buttons["開く"]
-        if systemAlert.waitForExistence(timeout: 5) {
-            systemAlert.tap()
-            return
-        }
-        let dump = XCTAttachment(string: "SAFARI:\n\(safari.debugDescription)\n\nSPRINGBOARD:\n\(springboard.debugDescription)")
-        dump.name = "handoff-tree"
-        dump.lifetime = .keepAlways
-        add(dump)
     }
 
     /// Safari must be foreground and accessible before it will accept a URL.
@@ -86,10 +69,7 @@ final class EndToEndRPTests: XCTestCase {
 
         let app = XCUIApplication()
         let approve = app.buttons["この識別子で応答する"]
-        if !approve.waitForExistence(timeout: 8) {
-            confirmHandoffIfAsked()
-        }
-        XCTAssertTrue(approve.waitForExistence(timeout: 20), "同意画面が表示されません")
+        XCTAssertTrue(waitForElement(approve, inPageDialogOf: safari), "同意画面が表示されません")
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "e2e-consent"
         screenshot.lifetime = .keepAlways
