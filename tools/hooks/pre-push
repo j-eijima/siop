@@ -39,6 +39,17 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         continue
     fi
 
+    # The reviewer compares against the checked-out HEAD, so it can only speak
+    # for the commits being pushed when they are the ones checked out. Pushing
+    # some other ref would otherwise be approved on the strength of a review of
+    # something else.
+    if [ "$local_sha" != "$(git rev-parse HEAD)" ]; then
+        echo "pre-push: $local_sha is not the checked-out HEAD." >&2
+        echo "pre-push: the review can only cover HEAD, so this push is refused." >&2
+        echo "pre-push: check out what you are pushing, or push with --no-verify." >&2
+        exit 1
+    fi
+
     count=$(git rev-list --count "$base..$local_sha")
     echo "pre-push: reviewing $count commit(s) against $(git rev-parse --short "$base")..."
 

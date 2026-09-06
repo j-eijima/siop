@@ -12,6 +12,14 @@ struct RootView: View {
                     IdentityView(identity: session.identity)
                 case let .consent(request):
                     ConsentView(request: request)
+                case let .delivering(clientID):
+                    ResultView(
+                        symbol: "paperplane.fill",
+                        tint: .accentColor,
+                        title: "応答を返しています",
+                        message: "\(clientID) を開いています。",
+                        detail: nil
+                    )
                 case let .sent(clientID, redirectURL):
                     ResultView(
                         symbol: "checkmark.seal.fill",

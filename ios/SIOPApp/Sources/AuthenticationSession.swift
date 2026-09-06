@@ -9,6 +9,8 @@ final class AuthenticationSession: ObservableObject {
     enum Phase {
         case idle
         case consent(AuthorizationRequest)
+        /// The response is built and the redirect is being opened.
+        case delivering(clientID: String)
         case sent(clientID: String, redirectURL: URL)
         case declined(clientID: String)
         /// The response was built but could not be delivered to the RP.
@@ -31,6 +33,11 @@ final class AuthenticationSession: ObservableObject {
     @Published private(set) var identity: Identity?
 
     private var op: SelfIssuedOP?
+
+    /// Opening a redirect completes asynchronously. Anything that moves on from
+    /// the request in flight bumps this, so a completion that lands afterwards
+    /// cannot overwrite whatever replaced it.
+    private var requestGeneration = 0
 
     init() {
         do {
@@ -75,6 +82,7 @@ final class AuthenticationSession: ObservableObject {
 #endif
 
     func receive(_ url: URL) {
+        requestGeneration += 1
         do {
             phase = .consent(try AuthorizationRequest(url: url))
         } catch {
@@ -117,15 +125,48 @@ final class AuthenticationSession: ObservableObject {
         to clientID: String,
         onSuccess: @escaping (String, URL) -> Phase
     ) {
-        UIApplication.shared.open(redirectURL) { [weak self] opened in
-            guard let self else { return }
+        let generation = requestGeneration
+        // Leaving the consent screen up would let the buttons be pressed again
+        // while the first response is still on its way.
+        phase = .delivering(clientID: clientID)
+
+        open(redirectURL) { [weak self] opened in
+            guard let self, generation == self.requestGeneration else { return }
             self.phase = opened
                 ? onSuccess(clientID, redirectURL)
                 : .undeliverable(clientID: clientID, redirectURL: redirectURL)
         }
     }
 
+    private func open(_ url: URL, completion: @escaping (Bool) -> Void) {
+#if DEBUG
+        // UI tests use this to hold a delivery open while another request
+        // arrives, which is the race the generation check exists for.
+        if let delay = Self.deliveryDelayForTesting {
+            UIApplication.shared.open(url) { opened in
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { completion(opened) }
+            }
+            return
+        }
+#endif
+        UIApplication.shared.open(url, completionHandler: completion)
+    }
+
+#if DEBUG
+    static let deliveryDelayLaunchArgument = "-siopDeliveryDelaySeconds"
+
+    private static var deliveryDelayForTesting: TimeInterval? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let flag = arguments.firstIndex(of: deliveryDelayLaunchArgument),
+              arguments.index(after: flag) < arguments.endIndex,
+              let seconds = TimeInterval(arguments[arguments.index(after: flag)])
+        else { return nil }
+        return seconds
+    }
+#endif
+
     func reset() {
+        requestGeneration += 1
         phase = identity == nil ? phase : .idle
     }
 
