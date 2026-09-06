@@ -34,6 +34,21 @@ struct ConsentView: View {
                          : "識別子(sub)のみを返します。")
                 }
 
+                Section {
+                    if let subject = session.establishedSubject(for: request.clientID) {
+                        Text(subject)
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                    } else {
+                        Text("この要求元は初めてです。応答すると、この要求元専用の識別子を作成します。")
+                            .font(.callout)
+                    }
+                } header: {
+                    Text("この要求元に提示する識別子 (sub)")
+                } footer: {
+                    Text("この要求元専用の値です。他の RP には別の値を提示します。")
+                }
+
                 Section("リクエスト詳細") {
                     LabeledContent("response_type", value: request.responseType)
                     LabeledContent("nonce") {

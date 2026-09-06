@@ -2,10 +2,18 @@ import Foundation
 
 /// Self-Issued OpenID Provider (OpenID Connect Core 1.0 Section 7).
 public struct SelfIssuedOP {
-    public let keyProvider: SIOPKeyProvider
+    public let keyStore: SIOPKeyStore
 
-    public init(keyProvider: SIOPKeyProvider) {
-        self.keyProvider = keyProvider
+    /// The key is chosen per request rather than held here: the subject an RP
+    /// sees is the thumbprint of the key that signs for it, so a single key
+    /// would make every RP see the same person.
+    public init(keyStore: SIOPKeyStore) {
+        self.keyStore = keyStore
+    }
+
+    /// The identifier this device presents to `clientID`.
+    public func subject(for clientID: String) throws -> String {
+        try keyStore.subject(for: clientID)
     }
 
     /// Parses an authentication request URL (openid://...) and produces the
@@ -17,7 +25,8 @@ public struct SelfIssuedOP {
     /// Issues an ID Token for an already-parsed request, e.g. after the user
     /// has approved it on a consent screen.
     public func respond(to request: AuthorizationRequest, now: Date = Date()) throws -> AuthenticationResponse {
-        let idToken = try SelfIssuedIDToken.issue(for: request, key: keyProvider, now: now)
+        let key = try keyStore.keyProvider(for: request.clientID)
+        let idToken = try SelfIssuedIDToken.issue(for: request, key: key, now: now)
         return try AuthenticationResponse(idToken: idToken, state: request.state, redirectURI: request.clientID)
     }
 }

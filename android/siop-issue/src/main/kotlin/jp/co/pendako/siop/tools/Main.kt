@@ -1,6 +1,7 @@
 package jp.co.pendako.siop.tools
 
-import jp.co.pendako.siop.KeyPairProvider
+import jp.co.pendako.siop.AuthorizationRequest
+import jp.co.pendako.siop.EphemeralKeyStore
 import jp.co.pendako.siop.SelfIssuedOp
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -25,12 +26,13 @@ fun main(arguments: Array<String>) {
     val now = System.currentTimeMillis() / 1000 - if (arguments.contains("--expired")) 3600 else 0
 
     try {
-        val provider = KeyPairProvider.generate()
-        val response = SelfIssuedOp(provider).handle(requestUrl, nowEpochSeconds = now)
+        val op = SelfIssuedOp(EphemeralKeyStore())
+        val request = AuthorizationRequest.parse(requestUrl)
+        val response = op.respond(request, nowEpochSeconds = now)
         val output = buildJsonObject {
             put("id_token", response.idToken)
             put("redirect_url", response.redirectUrl)
-            put("sub", provider.publicJwk().thumbprint())
+            put("sub", op.subject(request.clientId))
         }
         println(Json { prettyPrint = true }.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), output))
     } catch (cause: Exception) {

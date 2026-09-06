@@ -18,19 +18,18 @@ final class AuthenticationSession: ObservableObject {
         case failed(String)
     }
 
-    /// The self-issued identity this device presents to every RP.
-    struct Identity {
-        let subject: String
-        let jwk: RSAPublicJWK
-        /// False when the Keychain was unavailable and an in-memory key is in
-        /// use, which means `subject` will not survive a relaunch.
+    /// There is no single identity: a separate key, and so a separate subject,
+    /// is presented to each RP.
+    struct KeyState {
+        /// False when the Keychain was unavailable and in-memory keys are in
+        /// use, which means subjects will not survive a relaunch.
         let isPersistent: Bool
     }
 
     private static let keyTag = "jp.co.pendako.siop.key"
 
     @Published private(set) var phase: Phase = .idle
-    @Published private(set) var identity: Identity?
+    private(set) var keyState: KeyState?
 
     private var op: SelfIssuedOP?
 
@@ -40,25 +39,33 @@ final class AuthenticationSession: ObservableObject {
     private var requestGeneration = 0
 
     init() {
+        let (store, isPersistent) = Self.makeKeyStore()
+        op = SelfIssuedOP(keyStore: store)
+        keyState = KeyState(isPersistent: isPersistent)
+    }
+
+    /// Prefers Keychain-backed keys so subjects stay stable across launches,
+    /// falling back to ephemeral ones so the app remains usable.
+    private static func makeKeyStore() -> (SIOPKeyStore, Bool) {
+        let keychain = KeychainKeyStore(tagPrefix: keyTag)
         do {
-            let (provider, isPersistent) = try Self.makeKeyProvider()
-            let op = SelfIssuedOP(keyProvider: provider)
-            let jwk = try provider.publicJWK()
-            self.op = op
-            identity = Identity(subject: jwk.thumbprint(), jwk: jwk, isPersistent: isPersistent)
+            // Proves the Keychain is usable before relying on it for every RP.
+            _ = try keychain.keyProvider(for: "https://self-issued.me/probe")
+            return (keychain, true)
         } catch {
-            phase = .failed("鍵を準備できませんでした: \(Self.describe(error))")
+            return (EphemeralKeyStore(), false)
         }
     }
 
-    /// Prefers a Keychain-backed key so `sub` stays stable across launches,
-    /// falling back to an ephemeral one so the app remains usable.
-    private static func makeKeyProvider() throws -> (SIOPKeyProvider, Bool) {
-        do {
-            return (try SecKeyProvider.loadOrCreate(tag: keyTag), true)
-        } catch {
-            return (try SecKeyProvider.generate(), false)
-        }
+    /// The identifier already established with `clientID`, or nil if this RP
+    /// has not been answered before.
+    ///
+    /// Deliberately does not create one: `client_id` comes from whoever sent
+    /// the request, and making a key costs an RSA generation and a permanent
+    /// Keychain entry. A stream of unanswered requests must not be able to
+    /// fill the Keychain or stall the screen.
+    func establishedSubject(for clientID: String) -> String? {
+        try? op?.keyStore.existingSubject(for: clientID)
     }
 
     // MARK: - Request handling
@@ -167,7 +174,7 @@ final class AuthenticationSession: ObservableObject {
 
     func reset() {
         requestGeneration += 1
-        phase = identity == nil ? phase : .idle
+        phase = .idle
     }
 
     // MARK: - Errors

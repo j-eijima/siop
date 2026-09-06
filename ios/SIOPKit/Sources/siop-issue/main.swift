@@ -16,12 +16,13 @@ guard let requestURL = arguments.first(where: { !$0.hasPrefix("--") }).flatMap(U
 let issuedAt = arguments.contains("--expired") ? Date(timeIntervalSinceNow: -3600) : Date()
 
 do {
-    let provider = try SecKeyProvider.generate()
-    let response = try SelfIssuedOP(keyProvider: provider).handle(url: requestURL, now: issuedAt)
+    let op = SelfIssuedOP(keyStore: EphemeralKeyStore())
+    let request = try AuthorizationRequest(url: requestURL)
+    let response = try op.respond(to: request, now: issuedAt)
     let output: [String: Any] = [
         "id_token": response.idToken,
         "redirect_url": response.redirectURL.absoluteString,
-        "sub": try provider.publicJWK().thumbprint(),
+        "sub": try op.subject(for: request.clientID),
     ]
     let data = try JSONSerialization.data(withJSONObject: output, options: [.prettyPrinted, .sortedKeys])
     print(String(decoding: data, as: UTF8.self))

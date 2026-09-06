@@ -16,7 +16,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         session = try {
-            AuthenticationSession(SiopKeyStore.loadOrCreate())
+            val keys = AndroidKeystoreKeyStore(KEY_ALIAS_PREFIX)
+            // Proves the keystore is usable before relying on it for every RP.
+            keys.keyProvider("https://self-issued.me/probe")
+            AuthenticationSession(keys)
         } catch (cause: Exception) {
             AuthenticationSession(null, keyFailure = cause.toString())
         }
@@ -68,3 +71,5 @@ class MainActivity : ComponentActivity() {
         false
     }
 }
+
+private const val KEY_ALIAS_PREFIX = "jp.co.pendako.siop.key"

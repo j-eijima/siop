@@ -4,11 +4,14 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import jp.co.pendako.siop.KeyPairProvider
+import jp.co.pendako.siop.EphemeralKeyStore
 import jp.co.pendako.siop.SelfIssuedIdTokenValidator
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -35,7 +38,7 @@ class AuthenticationFlowTest {
             "&scope=openid%20profile&state=af0ifjsldkj&nonce=n-0S6_WzA2Mj"
 
     private fun session(url: String = requestUrl): AuthenticationSession {
-        val session = AuthenticationSession(KeyPairProvider.generate())
+        val session = AuthenticationSession(EphemeralKeyStore())
         session.receive(url)
         return session
     }
@@ -50,8 +53,10 @@ class AuthenticationFlowTest {
 
         composeRule.onNodeWithText(clientId).assertIsDisplayed()
         composeRule.onNodeWithText("openid").assertIsDisplayed()
-        composeRule.onNodeWithText("profile").assertIsDisplayed()
-        composeRule.onNodeWithText("n-0S6_WzA2Mj").assertIsDisplayed()
+        // Further down the request; scrolling to it proves it is reachable.
+        composeRule.onNodeWithText("profile").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("n-0S6_WzA2Mj").performScrollTo().assertIsDisplayed()
+        // The decision stays put while the request scrolls.
         composeRule.onNodeWithText("この識別子で応答する").assertIsDisplayed()
         composeRule.onNodeWithText("拒否する").assertIsDisplayed()
     }
@@ -115,6 +120,47 @@ class AuthenticationFlowTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("応答を渡せませんでした").assertIsDisplayed()
+    }
+
+    /**
+     * The subject is the thumbprint of a key made for one RP, so a second RP
+     * must be shown a different one.
+     */
+    @Test
+    fun eachRpIsShownItsOwnSubject() {
+        val store = EphemeralKeyStore()
+        val one = "https://one.example/cb"
+        val two = "https://two.example/cb"
+
+        // Answering an RP is what establishes its identifier.
+        assertNotEquals(store.subject(one), store.subject(two))
+        assertEquals(store.subject(one), store.subject(one))
+
+        val session = AuthenticationSession(store)
+        session.receive(
+            "openid://?response_type=id_token&scope=openid&nonce=n1&client_id=" +
+                java.net.URLEncoder.encode(one, "UTF-8")
+        )
+        show(session)
+        composeRule.onNodeWithText(requireNotNull(session.establishedSubject(one)))
+            .performScrollTo().assertIsDisplayed()
+    }
+
+    /**
+     * Showing a consent screen must not create a key: the `client_id` comes
+     * from whoever sent the request, so an unanswered stream of them would
+     * otherwise fill the keystore.
+     */
+    @Test
+    fun anUnansweredRequestEstablishesNoIdentifier() {
+        val store = EphemeralKeyStore()
+        val session = AuthenticationSession(store)
+        session.receive(requestUrl)
+        show(session)
+
+        composeRule.onNodeWithText("この要求元は初めてです。応答すると、この要求元専用の識別子を作成します。")
+            .performScrollTo().assertIsDisplayed()
+        assertNull(store.existingKeyProvider(clientId))
     }
 
     @Test

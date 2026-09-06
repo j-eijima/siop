@@ -1,7 +1,16 @@
 package jp.co.pendako.siop
 
-/** Self-Issued OpenID Provider (OpenID Connect Core 1.0 Section 7). */
-class SelfIssuedOp(private val keyProvider: SiopKeyProvider) {
+/**
+ * Self-Issued OpenID Provider (OpenID Connect Core 1.0 Section 7).
+ *
+ * The key is chosen per request rather than held here: the subject an RP sees
+ * is the thumbprint of the key that signs for it, so a single key would make
+ * every RP see the same person.
+ */
+class SelfIssuedOp(private val keyStore: SiopKeyStore) {
+
+    /** The identifier this device presents to [clientId]. */
+    fun subject(clientId: String): String = keyStore.subject(clientId)
 
     /** Parses a request URL and produces the response for the RP (Section 7.4). */
     fun handle(
@@ -14,7 +23,8 @@ class SelfIssuedOp(private val keyProvider: SiopKeyProvider) {
         request: AuthorizationRequest,
         nowEpochSeconds: Long = System.currentTimeMillis() / 1000,
     ): AuthenticationResponse {
-        val idToken = SelfIssuedIdToken.issue(request, keyProvider, nowEpochSeconds = nowEpochSeconds)
+        val key = keyStore.keyProvider(request.clientId)
+        val idToken = SelfIssuedIdToken.issue(request, key, nowEpochSeconds = nowEpochSeconds)
         return AuthenticationResponse(idToken, request.state, request.clientId)
     }
 }

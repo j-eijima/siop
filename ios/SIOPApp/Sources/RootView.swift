@@ -9,7 +9,7 @@ struct RootView: View {
             Group {
                 switch session.phase {
                 case .idle:
-                    IdentityView(identity: session.identity)
+                    IdentityView(keyState: session.keyState)
                 case let .consent(request):
                     ConsentView(request: request)
                 case let .delivering(clientID):

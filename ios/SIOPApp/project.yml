@@ -20,8 +20,17 @@ targets:
       properties:
         CFBundleDisplayName: SIOP
         UILaunchScreen: {}
+        # An OP is opened from whatever the user was already doing, so it has
+        # to appear in whatever orientation they are holding the device in.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         # Section 7.1: the Self-Issued OP authorization endpoint is `openid:`.
         CFBundleURLTypes:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)

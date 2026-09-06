@@ -27,11 +27,12 @@ import androidx.compose.ui.unit.dp
 fun RootScreen(session: AuthenticationSession, onRespond: (String) -> Boolean) {
     when (val phase = session.phase) {
         is AuthenticationSession.Phase.Idle ->
-            IdentityScreen(session.identity)
+            IdentityScreen(session.hasKeys)
 
         is AuthenticationSession.Phase.Consent ->
             ConsentScreen(
                 request = phase.request,
+                subject = session.establishedSubject(phase.request.clientId),
                 onApprove = { session.approve(phase.request, onRespond) },
                 onDecline = { session.decline(phase.request, onRespond) },
             )

@@ -6,6 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -90,15 +91,66 @@ class AuthorizationRequestTest {
     }
 }
 
+class PairwiseSubjectTest {
+    private val store = EphemeralKeyStore()
+
+    private fun request(clientId: String) = AuthorizationRequest.parse(
+        "openid://?response_type=id_token&scope=openid&nonce=n1&client_id=" +
+            java.net.URLEncoder.encode(clientId, "UTF-8")
+    )
+
+    /**
+     * The advertised subject type is pairwise, so two RPs must not be handed
+     * the same identifier — otherwise they can discover they share a user.
+     */
+    @Test
+    fun `different RPs get different subjects`() {
+        assertNotEquals(store.subject("https://one.example/cb"), store.subject("https://two.example/cb"))
+    }
+
+    /** ...while the same RP must recognise the user on the way back. */
+    @Test
+    fun `the same RP gets the same subject every time`() {
+        assertEquals(store.subject("https://one.example/cb"), store.subject("https://one.example/cb"))
+    }
+
+    @Test
+    fun `the token carries the subject for its own RP`() {
+        val op = SelfIssuedOp(store)
+        for (clientId in listOf("https://one.example/cb", "https://two.example/cb")) {
+            val response = op.respond(request(clientId))
+            val payload = SelfIssuedIdTokenValidator.validate(
+                idToken = response.idToken,
+                expectedAudience = clientId,
+                expectedNonce = "n1",
+            )
+            assertEquals(op.subject(clientId), payload.getValue("sub").jsonPrimitive.content)
+        }
+    }
+
+    /**
+     * The keystore alias has to be derived from the client_id, or the keys
+     * would collide and the subjects with them.
+     */
+    @Test
+    fun `keystore aliases differ per RP`() {
+        val one = SiopKeyStore.alias("test", "https://one.example/cb")
+        val two = SiopKeyStore.alias("test", "https://two.example/cb")
+        assertNotEquals(one, two)
+        assertEquals(one, SiopKeyStore.alias("test", "https://one.example/cb"))
+        assertTrue(one.startsWith("test."))
+    }
+}
+
 class SelfIssuedOpTest {
-    private val keyProvider = KeyPairProvider.generate()
+    private val keyStore = EphemeralKeyStore()
     private val requestUrl =
         "openid://?response_type=id_token&client_id=https%3A%2F%2Fclient.example.org%2Fcb" +
             "&scope=openid%20profile&state=af0ifjsldkj&nonce=n-0S6_WzA2Mj"
 
     @Test
     fun `issues a token this implementation can validate`() {
-        val response = SelfIssuedOp(keyProvider).handle(requestUrl)
+        val response = SelfIssuedOp(keyStore).handle(requestUrl)
 
         assertEquals("af0ifjsldkj", response.state)
         assertTrue(response.redirectUrl.startsWith("https://client.example.org/cb#id_token="))
@@ -110,12 +162,12 @@ class SelfIssuedOpTest {
             expectedNonce = "n-0S6_WzA2Mj",
         )
         assertEquals(SelfIssuedIdToken.ISSUER, payload.string("iss"))
-        assertEquals(keyProvider.publicJwk().thumbprint(), payload.string("sub"))
+        assertEquals(keyStore.subject("https://client.example.org/cb"), payload.string("sub"))
     }
 
     @Test
     fun `rejects a tampered payload`() {
-        val response = SelfIssuedOp(keyProvider).handle(requestUrl)
+        val response = SelfIssuedOp(keyStore).handle(requestUrl)
         val parts = response.idToken.split(".").toMutableList()
         val payload = String(Base64Url.decode(parts[1]))
             .replace("https://client.example.org/cb", "https://attacker.example/cb")
@@ -133,7 +185,7 @@ class SelfIssuedOpTest {
     @Test
     fun `rejects an expired token`() {
         val issuedLongAgo = System.currentTimeMillis() / 1000 - 3600
-        val response = SelfIssuedOp(keyProvider).handle(requestUrl, nowEpochSeconds = issuedLongAgo)
+        val response = SelfIssuedOp(keyStore).handle(requestUrl, nowEpochSeconds = issuedLongAgo)
         val error = assertFailsWith<SiopError.InvalidToken> {
             SelfIssuedIdTokenValidator.validate(
                 idToken = response.idToken,

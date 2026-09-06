@@ -33,14 +33,11 @@ public final class SecKeyProvider: SIOPKeyProvider {
         return try SecKeyProvider(privateKey: key)
     }
 
-    /// Loads the key pair stored under `tag` in the Keychain, generating and
-    /// persisting one on first use. Persisting the key keeps `sub` stable
-    /// across authentications from the same device.
-    public static func loadOrCreate(tag: String) throws -> SecKeyProvider {
-        let tagData = Data(tag.utf8)
+    /// The key stored under `tag`, or nil when there is none. Creates nothing.
+    public static func load(tag: String) throws -> SecKeyProvider? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: tagData,
+            kSecAttrApplicationTag as String: Data(tag.utf8),
             kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
             kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
             kSecReturnRef as String: true,
@@ -53,6 +50,15 @@ public final class SecKeyProvider: SIOPKeyProvider {
         guard status == errSecItemNotFound else {
             throw SIOPError.keyGenerationFailed("keychain error \(status)")
         }
+        return nil
+    }
+
+    /// Loads the key pair stored under `tag` in the Keychain, generating and
+    /// persisting one on first use. Persisting the key keeps `sub` stable
+    /// across authentications from the same device.
+    public static func loadOrCreate(tag: String) throws -> SecKeyProvider {
+        if let existing = try load(tag: tag) { return existing }
+        let tagData = Data(tag.utf8)
         let attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
             kSecAttrKeySizeInBits as String: 2048,

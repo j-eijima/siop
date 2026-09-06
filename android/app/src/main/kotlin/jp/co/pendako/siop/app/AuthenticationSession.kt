@@ -5,16 +5,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import jp.co.pendako.siop.AuthenticationErrorResponse
 import jp.co.pendako.siop.AuthorizationRequest
-import jp.co.pendako.siop.KeyPairProvider
-import jp.co.pendako.siop.RsaPublicJwk
 import jp.co.pendako.siop.SelfIssuedOp
 import jp.co.pendako.siop.SiopError
+import jp.co.pendako.siop.SiopKeyStore
 
 /**
  * Drives one authentication request from arrival through consent to the
  * response handed back to the RP (OpenID Connect Core 1.0 Sections 7.3-7.4).
  */
-class AuthenticationSession(keyProvider: KeyPairProvider?, keyFailure: String? = null) {
+class AuthenticationSession(keyStore: SiopKeyStore?, keyFailure: String? = null) {
 
     sealed interface Phase {
         data object Idle : Phase
@@ -26,17 +25,31 @@ class AuthenticationSession(keyProvider: KeyPairProvider?, keyFailure: String? =
         data class Failed(val message: String) : Phase
     }
 
-    /** The self-issued identity this device presents to every RP. */
-    data class Identity(val subject: String, val jwk: RsaPublicJwk)
+    /**
+     * There is no single identity: a separate key, and so a separate subject,
+     * is presented to each RP.
+     */
+    val hasKeys: Boolean = keyStore != null
 
     var phase: Phase by mutableStateOf(
         if (keyFailure != null) Phase.Failed("鍵を準備できませんでした: $keyFailure") else Phase.Idle
     )
         private set
 
-    val identity: Identity? = keyProvider?.publicJwk()?.let { Identity(it.thumbprint(), it) }
+    private val keys = keyStore
+    private val op = keyStore?.let { SelfIssuedOp(it) }
 
-    private val op = keyProvider?.let { SelfIssuedOp(it) }
+    /**
+     * The identifier already established with [clientId], or null if this RP
+     * has not been answered before.
+     *
+     * Deliberately does not create one: `client_id` comes from whoever sent
+     * the request, and making a key costs an RSA generation and a permanent
+     * keystore entry. A stream of unanswered requests must not be able to fill
+     * the keystore or stall the screen.
+     */
+    fun establishedSubject(clientId: String): String? =
+        runCatching { keys?.existingSubject(clientId) }.getOrNull()
 
     fun receive(url: String) {
         phase = try {
@@ -84,7 +97,7 @@ class AuthenticationSession(keyProvider: KeyPairProvider?, keyFailure: String? =
     }
 
     fun reset() {
-        if (identity != null) phase = Phase.Idle
+        phase = Phase.Idle
     }
 
     private fun describe(cause: Exception): String = when (cause) {

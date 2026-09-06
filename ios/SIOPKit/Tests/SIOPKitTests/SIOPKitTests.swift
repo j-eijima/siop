@@ -81,15 +81,64 @@ final class KeyAndDERTests: XCTestCase {
     }
 }
 
+final class PairwiseSubjectTests: XCTestCase {
+    private let store = EphemeralKeyStore()
+
+    private func request(clientID: String) throws -> AuthorizationRequest {
+        let encoded = clientID.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+        return try AuthorizationRequest(
+            url: URL(string: "openid://?response_type=id_token&scope=openid&nonce=n1&client_id=\(encoded)")!
+        )
+    }
+
+    /// The advertised subject type is pairwise, so two RPs must not be handed
+    /// the same identifier — otherwise they can discover they share a user.
+    func testDifferentRPsGetDifferentSubjects() throws {
+        let first = try store.subject(for: "https://one.example/cb")
+        let second = try store.subject(for: "https://two.example/cb")
+        XCTAssertNotEqual(first, second)
+    }
+
+    /// ...while the same RP must recognise the user on the way back.
+    func testTheSameRPGetsTheSameSubjectEveryTime() throws {
+        let first = try store.subject(for: "https://one.example/cb")
+        let again = try store.subject(for: "https://one.example/cb")
+        XCTAssertEqual(first, again)
+    }
+
+    func testTheTokenCarriesTheSubjectForItsOwnRP() throws {
+        let op = SelfIssuedOP(keyStore: store)
+        for clientID in ["https://one.example/cb", "https://two.example/cb"] {
+            let response = try op.respond(to: try request(clientID: clientID))
+            let payload = try SelfIssuedIDTokenValidator.validate(
+                idToken: response.idToken,
+                expectedAudience: clientID,
+                expectedNonce: "n1"
+            )
+            XCTAssertEqual(payload["sub"] as? String, try op.subject(for: clientID))
+        }
+    }
+
+    /// The Keychain tag has to be derived from the client_id, or the keys would
+    /// collide and the subjects with them.
+    func testKeychainTagsDifferPerRP() {
+        let one = KeychainKeyStore.tag(prefix: "test", clientID: "https://one.example/cb")
+        let two = KeychainKeyStore.tag(prefix: "test", clientID: "https://two.example/cb")
+        XCTAssertNotEqual(one, two)
+        XCTAssertEqual(one, KeychainKeyStore.tag(prefix: "test", clientID: "https://one.example/cb"))
+        XCTAssertTrue(one.hasPrefix("test."))
+    }
+}
+
 final class SelfIssuedOPTests: XCTestCase {
-    private static let keyProvider = try! SecKeyProvider.generate()
+    private static let keyStore = EphemeralKeyStore()
 
     private var requestURL: URL {
         URL(string: "openid://?response_type=id_token&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid%20profile&state=af0ifjsldkj&nonce=n-0S6_WzA2Mj")!
     }
 
     func testIssuesValidatableIDToken() throws {
-        let op = SelfIssuedOP(keyProvider: Self.keyProvider)
+        let op = SelfIssuedOP(keyStore: Self.keyStore)
         let response = try op.handle(url: requestURL)
 
         XCTAssertEqual(response.state, "af0ifjsldkj")
@@ -106,7 +155,7 @@ final class SelfIssuedOPTests: XCTestCase {
     }
 
     func testSubEqualsSubJWKThumbprint() throws {
-        let op = SelfIssuedOP(keyProvider: Self.keyProvider)
+        let op = SelfIssuedOP(keyStore: Self.keyStore)
         let response = try op.handle(url: requestURL)
         let (_, payload, _, _) = try JWS.decode(response.idToken)
         let subJWK = try XCTUnwrap(payload["sub_jwk"] as? [String: Any])
@@ -115,11 +164,11 @@ final class SelfIssuedOPTests: XCTestCase {
             e: try XCTUnwrap(subJWK["e"] as? String)
         )
         XCTAssertEqual(payload["sub"] as? String, jwk.thumbprint())
-        XCTAssertEqual(jwk, try Self.keyProvider.publicJWK())
+        XCTAssertEqual(jwk.thumbprint(), try Self.keyStore.subject(for: "https://client.example.org/cb"))
     }
 
     func testTamperedPayloadFailsSignatureCheck() throws {
-        let op = SelfIssuedOP(keyProvider: Self.keyProvider)
+        let op = SelfIssuedOP(keyStore: Self.keyStore)
         let response = try op.handle(url: requestURL)
 
         var parts = response.idToken.components(separatedBy: ".")
@@ -138,7 +187,7 @@ final class SelfIssuedOPTests: XCTestCase {
     }
 
     func testExpiredTokenFailsValidation() throws {
-        let op = SelfIssuedOP(keyProvider: Self.keyProvider)
+        let op = SelfIssuedOP(keyStore: Self.keyStore)
         let response = try op.handle(url: requestURL, now: Date(timeIntervalSinceNow: -3600))
         XCTAssertThrowsError(try SelfIssuedIDTokenValidator.validate(
             idToken: response.idToken,

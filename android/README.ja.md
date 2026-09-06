@@ -23,16 +23,23 @@ gradle :siopkit:test
 | 7.4 Self-Issued ID Token の発行 | `SelfIssuedOp.handle` / `SelfIssuedIdToken` |
 | 7.5 RP 側の ID Token 検証 | `SelfIssuedIdTokenValidator` |
 | RFC 7638 JWK サムプリント(`sub` の値) | `RsaPublicJwk.thumbprint()` |
+| pairwise な sub(7.1 `subject_types_supported`) | `SiopKeyStore`。`client_id` ごとの鍵 |
 
 - 署名は仕様必須の RS256(RSA 2048bit)
-- `KeyPairProvider` は任意の JCA 鍵ペアを受け取る。Android Keystore の鍵を渡せば `sub` が
-  起動をまたいで安定する。テストでは `KeyPairProvider.generate()` の一時鍵を使う
+- 鍵は RP ごとに分ける。メタデータが広告するとおり本当に pairwise になり、2つの RP が同じ
+  利用者だと突き合わせることはできない。`SiopKeyStore` が `client_id` から鍵を解決する。
+  テストや CLI では `EphemeralKeyStore` がメモリ上に持ち、アプリは Android Keystore で裏打ちする
+- 鍵は利用者が応答したときに作る。リクエストが届いただけでは作らない。`client_id` は送信側が
+  決められるので、表示時に作ると未応答のリクエストでキーストアが埋まり、RSA 生成で画面が止まる
+- 単一鍵だった頃のバージョンから更新すると、識別子は変わる。旧鍵は全 RP で共有されていた
+  ため、引き継げば pairwise が取り除こうとしている紐付け可能性ごと引き継ぐことになる。移行
+  経路は用意しない
 
 ### 使い方
 
 ```kotlin
-val key = KeyPairProvider(keyPairFromAndroidKeystore)
-val response = SelfIssuedOp(key).handle(incomingOpenIdUrl)  // openid://?response_type=id_token&...
+val keys = AndroidKeystoreKeyStore("jp.example.siop.key")
+val response = SelfIssuedOp(keys).handle(incomingOpenIdUrl)  // openid://?response_type=id_token&...
 // response.redirectUrl を開いて RP に id_token をフラグメントで返す
 ```
 

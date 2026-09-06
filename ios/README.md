@@ -25,16 +25,26 @@ swift test    # unit tests (runnable on macOS)
 | 7.4 Issuing the Self-Issued ID Token | `SelfIssuedOP.handle(url:)` / `SelfIssuedIDToken` |
 | 7.5 RP-side ID Token validation | `SelfIssuedIDTokenValidator` |
 | RFC 7638 JWK thumbprint (the `sub` value) | `RSAPublicJWK.thumbprint()` |
+| Pairwise subjects (7.1 `subject_types_supported`) | `SIOPKeyStore`, a key per `client_id` |
 
 - Signing is RS256 with a 2048-bit RSA key, which the spec requires
-- `SecKeyProvider.loadOrCreate(tag:)` persists the key in the Keychain so that `sub` stays stable
-  for a given device. Tests use the ephemeral key from `generate()` instead
+- A separate key per RP, so the subject really is pairwise as the metadata says: two RPs cannot
+  tell they are talking to the same person. `KeychainKeyStore` derives a Keychain tag from the
+  `client_id`, so the same RP sees the same subject on every visit; `EphemeralKeyStore` keeps
+  keys in memory for tests and tools
+- A key is created when the user answers an RP, never when a request merely arrives. `client_id`
+  comes from whoever sent the request, so allocating on display would let unanswered requests
+  fill the Keychain and stall on RSA generation. The consent screen shows the established
+  subject when there is one, and says a new one will be made when there is not
+- Devices that ran the earlier single-key version present new subjects: the old key was shared
+  across RPs, and any scheme that preserved it would preserve the linkability that pairwise keys
+  exist to remove. There is no migration, and RPs that key accounts on `sub` will see a new user
 
 ### Using it
 
 ```swift
-let key = try SecKeyProvider.loadOrCreate(tag: "jp.example.siop.key")
-let op = SelfIssuedOP(keyProvider: key)
+let keys = KeychainKeyStore(tagPrefix: "jp.example.siop.key")
+let op = SelfIssuedOP(keyStore: keys)
 let response = try op.handle(url: incomingOpenIDURL)  // openid://?response_type=id_token&...
 // Open response.redirectURL to hand the id_token back to the RP in the fragment
 ```

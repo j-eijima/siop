@@ -15,41 +15,41 @@ import androidx.compose.ui.unit.dp
 import jp.co.pendako.siop.SelfIssuedIdToken
 
 /**
- * Shown when the app is opened directly: the identity this device presents,
- * and the static metadata a Self-Issued OP advertises (Section 7.1).
+ * Shown when the app is opened directly. There is no single identifier to
+ * show: the subject presented depends on which RP is asking, which is what
+ * makes the advertised pairwise subject type true.
  */
 @Composable
-fun IdentityScreen(identity: AuthenticationSession.Identity?) {
+fun IdentityScreen(hasKeys: Boolean) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Self-Issued OP", style = MaterialTheme.typography.titleLarge)
 
-        if (identity == null) {
+        if (!hasKeys) {
             Text("鍵を準備できませんでした", color = MaterialTheme.colorScheme.error)
             return@Column
         }
 
-        Text("この端末の識別子", style = MaterialTheme.typography.titleSmall)
-        Field("sub", identity.subject)
-        Field("kty", identity.jwk.kty)
-        Field("alg", "RS256")
+        Text("識別子", style = MaterialTheme.typography.titleSmall)
         Text(
-            "sub は公開鍵の JWK サムプリント(RFC 7638)です。RP ごとに固定の値を提示します。",
-            style = MaterialTheme.typography.bodySmall,
+            "この端末は、RP ごとに別の鍵で署名します。そのため RP ごとに異なる識別子 (sub) を" +
+                "提示し、同じ RP には毎回同じ識別子を提示します。",
+            style = MaterialTheme.typography.bodyMedium,
         )
-
-        Text("公開鍵 (sub_jwk)", style = MaterialTheme.typography.titleSmall)
         Text(
-            text = identity.jwk.n,
-            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            "sub は、その RP 向けの公開鍵の JWK サムプリント (RFC 7638) です。RP どうしが結託しても、" +
+                "同じ利用者だと突き合わせることはできません。",
+            style = MaterialTheme.typography.bodySmall,
         )
 
         Text("Discovery メタデータ", style = MaterialTheme.typography.titleSmall)
         Field("issuer", SelfIssuedIdToken.ISSUER)
         Field("authorization_endpoint", "openid:")
         Field("response_types", "id_token")
+        Field("subject_types", "pairwise")
+        Field("alg", "RS256")
         Text(
             "openid:// で始まる認証リクエストを受け取ると、同意画面を表示します。",
             style = MaterialTheme.typography.bodySmall,

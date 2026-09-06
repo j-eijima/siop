@@ -24,16 +24,25 @@ gradle :siopkit:test
 | 7.4 Issuing the Self-Issued ID Token | `SelfIssuedOp.handle` / `SelfIssuedIdToken` |
 | 7.5 RP-side ID Token validation | `SelfIssuedIdTokenValidator` |
 | RFC 7638 JWK thumbprint (the `sub` value) | `RsaPublicJwk.thumbprint()` |
+| Pairwise subjects (7.1 `subject_types_supported`) | `SiopKeyStore`, a key per `client_id` |
 
 - Signing is RS256 with a 2048-bit RSA key, which the spec requires
-- `KeyPairProvider` takes any JCA key pair. Give it one from the Android Keystore so that `sub`
-  stays stable across launches; `KeyPairProvider.generate()` produces an ephemeral one for tests
+- A separate key per RP, so the subject really is pairwise as the metadata says: two RPs cannot
+  tell they are talking to the same person. `SiopKeyStore` resolves a key from the `client_id`;
+  `EphemeralKeyStore` keeps them in memory for tests and tools, and the app backs it with the
+  Android Keystore
+- A key is created when the user answers an RP, never when a request merely arrives. `client_id`
+  comes from whoever sent the request, so allocating on display would let unanswered requests
+  fill the keystore and stall on RSA generation
+- Devices that ran the earlier single-key version present new subjects: the old key was shared
+  across RPs, and any scheme that preserved it would preserve the linkability that pairwise keys
+  exist to remove. There is no migration
 
 ### Using it
 
 ```kotlin
-val key = KeyPairProvider(keyPairFromAndroidKeystore)
-val response = SelfIssuedOp(key).handle(incomingOpenIdUrl)  // openid://?response_type=id_token&...
+val keys = AndroidKeystoreKeyStore("jp.example.siop.key")
+val response = SelfIssuedOp(keys).handle(incomingOpenIdUrl)  // openid://?response_type=id_token&...
 // Open response.redirectUrl to hand the id_token back to the RP in the fragment
 ```
 

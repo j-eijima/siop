@@ -24,15 +24,25 @@ swift test    # ユニットテスト(macOS 上で実行可)
 | 7.4 Response(Self-Issued ID Token 発行) | `SelfIssuedOP.handle(url:)` / `SelfIssuedIDToken` |
 | 7.5 RP 側の ID Token 検証 | `SelfIssuedIDTokenValidator` |
 | RFC 7638 JWK Thumbprint(`sub` 値) | `RSAPublicJWK.thumbprint()` |
+| pairwise な sub(7.1 `subject_types_supported`) | `SIOPKeyStore`。`client_id` ごとの鍵 |
 
 - 署名は仕様必須の RS256(RSA 2048bit)
-- 鍵は `SecKeyProvider.loadOrCreate(tag:)` で Keychain に永続化(`sub` をデバイス内で安定させる)。テストでは `generate()` の一時鍵を使用
+- 鍵は RP ごとに分ける。メタデータが広告するとおり本当に pairwise になり、2つの RP が同じ
+  利用者だと突き合わせることはできない。`KeychainKeyStore` が `client_id` から Keychain の
+  タグを導出するので、同じ RP には毎回同じ識別子を提示する。テストや CLI では
+  `EphemeralKeyStore` がメモリ上に鍵を持つ
+- 鍵は利用者が応答したときに作る。リクエストが届いただけでは作らない。`client_id` は送信側が
+  決められるので、表示時に作ると未応答のリクエストで Keychain が埋まり、RSA 生成で画面が
+  止まる。同意画面は、確立済みなら識別子を、未確立なら新しく作る旨を表示する
+- 単一鍵だった頃のバージョンから更新すると、識別子は変わる。旧鍵は全 RP で共有されていた
+  ため、引き継げば pairwise が取り除こうとしている紐付け可能性ごと引き継ぐことになる。移行
+  経路は用意しない。`sub` でアカウントを識別する RP からは別人に見える
 
 ### 使い方
 
 ```swift
-let key = try SecKeyProvider.loadOrCreate(tag: "jp.example.siop.key")
-let op = SelfIssuedOP(keyProvider: key)
+let keys = KeychainKeyStore(tagPrefix: "jp.example.siop.key")
+let op = SelfIssuedOP(keyStore: keys)
 let response = try op.handle(url: incomingOpenIDURL)  // openid://?response_type=id_token&...
 // response.redirectURL を開いて RP に id_token をフラグメントで返す
 ```
