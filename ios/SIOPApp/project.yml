@@ -1,0 +1,63 @@
+name: SIOPApp
+options:
+  bundleIdPrefix: jp.co.pendako
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  SIOPKit:
+    path: ../SIOPKit
+targets:
+  SIOPApp:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+    dependencies:
+      - package: SIOPKit
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: SIOP
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # Section 7.1: the Self-Issued OP authorization endpoint is `openid:`.
+        CFBundleURLTypes:
+          - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
+            CFBundleTypeRole: Editor
+            CFBundleURLSchemes: [openid]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: jp.co.pendako.siop
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+  SIOPAppUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests
+    dependencies:
+      - target: SIOPApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: jp.co.pendako.siop.uitests
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: SIOPApp
+schemes:
+  SIOPApp:
+    build:
+      targets:
+        SIOPApp: all
+        SIOPAppUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - SIOPAppUITests

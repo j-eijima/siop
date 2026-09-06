@@ -148,3 +148,31 @@ final class SelfIssuedOPTests: XCTestCase {
         }
     }
 }
+
+final class ErrorResponseTests: XCTestCase {
+    private var request: AuthorizationRequest {
+        get throws {
+            try AuthorizationRequest(url: URL(string: "openid://?response_type=id_token&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid&state=a%20b&nonce=n1")!)
+        }
+    }
+
+    func testDeniedRequestBuildsErrorRedirect() throws {
+        let response = try AuthenticationErrorResponse(request: try request)
+        XCTAssertEqual(
+            response.redirectURL.absoluteString,
+            "https://client.example.org/cb#error=access_denied&state=a%20b"
+        )
+    }
+
+    func testErrorDescriptionIsEncoded() throws {
+        let response = try AuthenticationErrorResponse(
+            error: "invalid_request",
+            errorDescription: "nonce is required",
+            request: try request
+        )
+        XCTAssertEqual(
+            response.redirectURL.absoluteString,
+            "https://client.example.org/cb#error=invalid_request&error_description=nonce%20is%20required&state=a%20b"
+        )
+    }
+}

@@ -1,6 +1,11 @@
 # OpenID Connect Core 仕様 7章 Self-Issued Identity Provider(SIOP)のリファレンス実装プロジェクト
 https://openid-foundation-japan.github.io/openid-connect-core-1_0.ja.html#SelfIssued
 
+# アウトプット
+- SIOPを利用するためのSDK
+  - ドキュメント
+- 実稼働するサンプルアプリ
+
 # 対応OS
 - iOS
 - Android

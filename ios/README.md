@@ -35,8 +35,40 @@ let response = try op.handle(url: incomingOpenIDURL)  // openid://?response_type
 // response.redirectURL を開いて RP に id_token をフラグメントで返す
 ```
 
+## SIOPApp
+
+`openid:` 認証エンドポイントを受け取る SwiftUI アプリ。プロジェクトは XcodeGen で
+`project.yml` から生成する(`.xcodeproj` は生成物なので Git 管理外)。
+
+```
+cd SIOPApp
+xcodegen generate
+xcodebuild -project SIOPApp.xcodeproj -scheme SIOPApp \
+  -destination 'platform=iOS Simulator,name=iPhone 17' test
+```
+
+### 画面と流れ
+
+1. **識別子画面** — この端末が提示する `sub`(JWK サムプリント)、公開鍵、Discovery メタデータ
+2. **同意画面** — `openid://...` を受け取ると表示。要求元(`client_id` = `redirect_uri`)、
+   要求 scope、`nonce` / `state` を提示する。SIOP は RP を認証できないため、要求元 URL は
+   「検証されていない」と明示している
+3. **応答** — 承認で ID Token を発行し `redirect_uri#id_token=...&state=...` を開く。
+   拒否時は Section 3.1.2.6 に従い `#error=access_denied` を返す
+
+### 動作確認
+
+```
+xcrun simctl openurl booted "openid://?response_type=id_token\
+&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid%20profile\
+&state=af0ifjsldkj&nonce=n-0S6_WzA2Mj"
+```
+
+UI テスト(`UITests/`)は `XCUIApplication.open(_:)` で同じ経路を再現し、同意 → 承認 /
+拒否 / 不正リクエストの各画面を検証する。
+
 ## TODO
 
-- `openid://` カスタム URL スキームを受けるアプリシェル(SwiftUI)
 - request / request_uri(Request Object、alg none / RS256)対応
 - claims パラメータに応じた標準クレームの応答
+- 承認済み RP の履歴表示
