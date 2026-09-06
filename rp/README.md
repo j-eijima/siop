@@ -1,78 +1,85 @@
-# SIOP テスト RP
+# SIOP test RP
 
-Self-Issued OpenID Provider (OpenID Connect Core 1.0 7章) の動作確認用 Relying Party。
+**English** | [日本語](README.ja.md)
 
-認証リクエストを組み立てて OP に渡し、返ってきた ID Token を Section 7.5 の手順で検証する。
-検証は WebCrypto を使ってブラウザ内で完結する — Implicit Flow の応答は URL のフラグメントで
-返り、フラグメントはサーバに送信されないため、ID Token がサーバに渡ることはない。
+A Relying Party for exercising a Self-Issued OpenID Provider (OpenID Connect Core 1.0,
+Section 7).
 
-## 起動
+It builds an authentication request, hands it to the OP, and verifies the returned ID Token by
+the steps in Section 7.5. Verification runs entirely in the browser using WebCrypto: the Implicit
+Flow returns the response in the URL fragment, and browsers do not send fragments to the server,
+so the ID Token never reaches one.
+
+## Starting it
 
 ```
 python3 serve.py            # http://localhost:8080/
 python3 serve.py --port 9000
 ```
 
-静的ファイルを配るだけで、依存パッケージは無い。
+It only serves static files. There are no dependencies to install.
 
-## 使い方
+## Using it
 
-1. `http://localhost:8080/` を開く
-2. パラメータを必要に応じて編集する(既定値は仕様に沿った最小構成)
-3. 「SIOP アプリで認証する」で `openid://...` を開く
-4. OP が `redirect_uri` のフラグメントに応答を載せて戻ってくると、検証結果が表示される
+1. Open `http://localhost:8080/`
+2. Edit the parameters as needed — the defaults are the smallest request the spec allows
+3. Press "SIOP アプリで認証する" to open `openid://...`
+4. When the OP returns the response in the fragment of `redirect_uri`, the verification result
+   appears
 
-### リクエストは編集できる
+### The request is editable
 
-すべてのパラメータを書き換えられ、追加もできる。仕様から外れた値は「仕様との差分」に警告として
-出るが、送信は止めない — OP が不正なリクエストをどう扱うかを確かめるのが目的なので、
-`response_type=code` や nonce 無しをそのまま送れる。
+Every parameter can be changed, and more can be added. Values that depart from the spec are
+reported under "仕様との差分" as warnings, but sending is never blocked — seeing how an OP handles
+a malformed request is the point, so `response_type=code` or a missing nonce can be sent as-is.
 
-各パラメータには根拠となる章番号を添えてある。応答側も、受け取ったフラグメントの各パラメータと
-ID Token の各クレームを同じ形式で並べる。
+Each parameter carries the section number it comes from. The response side lists the received
+fragment parameters and the ID Token claims in the same form.
 
-## 検証項目 (Section 7.5)
+## What is checked (Section 7.5)
 
-| 項目 | 内容 |
+| Check | Detail |
 |---|---|
-| JWS 形式 | 3 セグメントに分解でき、ヘッダとペイロードが JSON として読める |
-| alg | `RS256`(7.1 で必須とされる署名アルゴリズム) |
+| JWS structure | Splits into three segments; header and payload parse as JSON |
+| alg | `RS256`, the algorithm Section 7.1 requires |
 | iss | `https://self-issued.me` |
-| sub_jwk | RSA 公開鍵が含まれる |
-| sub | `sub_jwk` の JWK サムプリント (RFC 7638) と一致する |
-| 署名 | `sub_jwk` の鍵で検証できる |
-| aud | この RP の `client_id` 宛て |
-| nonce | リクエストで送った値と一致する |
-| exp | 期限内 |
+| sub_jwk | Carries an RSA public key |
+| sub | Equals the JWK thumbprint (RFC 7638) of `sub_jwk` |
+| signature | Verifies against the key in `sub_jwk` |
+| aud | Addressed to this RP's `client_id` |
+| nonce | Matches the value sent in the request |
+| exp | Not expired |
 
-失敗しても最初の項目で止めず、全項目の結果を一覧で出す。
+A failure does not stop the run: every check is reported so the whole picture is visible.
 
-## テスト
+## Tests
 
 ```
 node --test
 ```
 
-Node だけあれば動く。依存パッケージは無い。
+Node is all that is needed; there are no dependencies.
 
-- `test/verify.test.mjs` — Swift (`ios/SIOPKit`) が署名した実物の ID Token
-  (`test/fixtures/swift-issued.json`)を検証する。改竄・aud 不一致・nonce 不一致・
-  期限切れが正しく弾かれることも確認する
-- `test/cross-implementation.test.mjs` — 同じ検証を、**その時点の** Swift ビルドが発行した
-  トークンに対して行う。フィクスチャが古くなって相互運用性の後退を見逃すのを防ぐ。
-  Swift が無い環境では自動でスキップされる
+- `test/verify.test.mjs` — verifies a real ID Token signed by Swift (`ios/SIOPKit`) and committed
+  as `test/fixtures/swift-issued.json`. It also confirms that tampering, a mismatched aud, a
+  mismatched nonce, and expiry are all rejected
+- `test/cross-implementation.test.mjs` — the same checks against a token from the **current**
+  Swift build, so a stale fixture cannot hide an interoperability regression. Skipped
+  automatically where SIOPKit cannot be built
 
-フィクスチャの更新は `test/fixtures/regenerate.sh`(Swift が必要)。
+Refresh the fixture with `test/fixtures/regenerate.sh` (needs Swift).
 
-iOS アプリまで含めた end-to-end テストは
-`ios/SIOPApp/UITests/EndToEndRPTests.swift`(このサーバの起動が前提)。
+The end-to-end test that includes the iOS app is
+`ios/SIOPApp/UITests/EndToEndRPTests.swift` (it needs this server running).
 
-## 既知の制約
+## Known limitations
 
-- **既定のブラウザで開くこと。** OP は `redirect_uri` を開いて応答を返すが、iOS は https を
-  既定ブラウザに渡すため、リクエストを始めたブラウザに戻す方法が無い。別のブラウザで始めると
-  応答が届かず、nonce / state を保持している localStorage も参照できないため照合に失敗する
-  (誤って成功する方向には倒れない)。
-- 実機から使う場合は Mac の LAN アドレスで開く(`client_id` / `redirect_uri` は開いている URL に
-  追従する)。ただしブラウザは LAN アドレスの平文 HTTP を secure context とみなさないため、
-  WebCrypto を使う検証は動かない。実機で検証まで通すには HTTPS かトンネルが要る。
+- **Open this in your default browser.** The OP returns the response by opening `redirect_uri`,
+  and iOS hands an https URL to the default browser — there is no way to return to the browser
+  that started the request. Starting in a different browser means the response never arrives, and
+  the localStorage holding the nonce and state is not reachable either, so the check fails. It
+  fails closed: it never succeeds incorrectly.
+- To use it from a physical device, open the Mac's LAN address (`client_id` and `redirect_uri`
+  follow whatever URL the page is served from). Browsers do not treat plain HTTP on a LAN address
+  as a secure context, though, so WebCrypto — and therefore verification — will not run there.
+  Getting that far on a device needs HTTPS or a tunnel.

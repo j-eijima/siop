@@ -1,68 +1,78 @@
 # SIOP
 
-OpenID Connect Core 1.0 [7章 Self-Issued OpenID Provider](https://openid-foundation-japan.github.io/openid-connect-core-1_0.ja.html#SelfIssued)
-のリファレンス実装。
+**English** | [日本語](README.ja.md)
 
-Self-Issued OpenID Provider (SIOP) は、認証サーバを置かずに端末自身が OpenID Provider として
-振る舞う仕組み。端末が持つ鍵で自分に対して ID Token を発行し、その公開鍵を `sub_jwk` として
-トークンに同梱する。識別子 `sub` はその公開鍵の JWK サムプリント (RFC 7638) なので、
-第三者の登録も発行も要らずに、鍵の持ち主であることだけを RP に示せる。
+A reference implementation of
+[Section 7, Self-Issued OpenID Provider](https://openid.net/specs/openid-connect-core-1_0.html#SelfIssued)
+of OpenID Connect Core 1.0.
 
-各 OS のデファクト言語で実装し、共通の RP で相互に検証する。
+A Self-Issued OpenID Provider (SIOP) does away with the authorization server: the end user's own
+device acts as the OpenID Provider. It signs an ID Token with a key it holds and carries the
+matching public key inside the token as `sub_jwk`. The subject identifier `sub` is the JWK
+thumbprint (RFC 7638) of that public key, so the user proves possession of a key to a Relying
+Party without anyone having registered or issued an identifier for them.
 
-## 実装状況
+Each OS is implemented in its own default language, and every implementation is checked against
+one shared Relying Party.
 
-| | 言語 | 状態 |
+## Status
+
+| | Language | State |
 |---|---|---|
-| [ios/](ios/) | Swift | ✅ SIOPKit(コア)+ SIOPApp(`openid:` を受けるアプリ) |
-| [android/](android/) | Kotlin | 未着手 |
-| [cross_platform/flutter/](cross_platform/flutter/) | Dart | 未着手 |
-| [windows/](windows/) | C# | 未着手 |
-| [macos/](macos/) | Swift | 未着手 |
-| [cross_platform/rust/](cross_platform/rust/) | Rust | 未着手 |
-| [linux/](linux/) | — | 未着手 |
-| [rp/](rp/) | JavaScript | ✅ 全実装共通のテスト用 Relying Party |
+| [ios/](ios/) | Swift | ✅ SIOPKit (core) + SIOPApp (receives `openid:`) |
+| `android/` | Kotlin | Not started |
+| `cross_platform/flutter/` | Dart | Not started |
+| `windows/` | C# | Not started |
+| `macos/` | Swift | Not started |
+| `cross_platform/rust/` | Rust | Not started |
+| `linux/` | — | Not started |
+| [rp/](rp/) | JavaScript | ✅ Test Relying Party shared by every implementation |
 
-## 仕様との対応
+## What the spec asks for
 
-| 仕様 | 内容 |
+| Section | Requirement |
 |---|---|
-| 7.1 Discovery | 静的メタデータ。`authorization_endpoint` は `openid:`、署名は RS256 |
-| 7.2 Registration | 登録手続きが無く、RP は redirect URI をそのまま `client_id` として使う |
-| 7.3 Request | `openid://` で受け取る認証リクエスト |
-| 7.4 Response | `iss` = `https://self-issued.me`、`sub` = `sub_jwk` のサムプリント |
-| 7.5 Validation | RP 側での iss / sub / sub_jwk / 署名 / aud / nonce の検証 |
+| 7.1 Discovery | Static metadata; `authorization_endpoint` is `openid:` and the signing algorithm is RS256 |
+| 7.2 Registration | There is no registration step, so the RP uses its redirect URI as the `client_id` |
+| 7.3 Request | The authentication request arrives on `openid://` |
+| 7.4 Response | `iss` is `https://self-issued.me` and `sub` is the thumbprint of `sub_jwk` |
+| 7.5 Validation | The RP checks iss, sub, sub_jwk, the signature, aud and nonce |
 
-## 動かす
+## Running it
 
 ```
-# テスト RP を起動 (http://localhost:8080/)
+# Start the test RP (http://localhost:8080/)
 python3 rp/serve.py
 
-# iOS: SIOPKit のユニットテスト
+# iOS: SIOPKit unit tests
 cd ios/SIOPKit && swift test
 
-# iOS: アプリと end-to-end テスト (RP の起動が前提)
+# iOS: the app and its end-to-end test (needs the RP running)
 cd ios/SIOPApp && xcodegen generate
 xcodebuild -project SIOPApp.xcodeproj -scheme SIOPApp \
   -destination 'platform=iOS Simulator,name=iPhone 17' test
 
-# RP の検証ロジック (Node だけで動く)
+# The RP's verification logic (Node only)
 cd rp && node --test
 ```
 
-## 実装間の一致をどう確かめるか
+Pick a simulator that your Xcode actually has; `iPhone 17` is only an example.
 
-実装が増えるほど、各実装が「自分の中では正しい」状態に留まりやすくなる。それを防ぐため、
-検証は必ず別の実装に渡して行う。
+## How agreement between implementations is established
 
-- `rp/test/verify.test.mjs` — Swift (SIOPKit) が署名した実物の ID Token を JavaScript が検証する。
-  トークンはフィクスチャとしてコミットしてあるので、Swift の無い環境でも走る
-- `rp/test/cross-implementation.test.mjs` — 同じ検証をその時点の Swift ビルドの出力に対して行い、
-  フィクスチャが古くなって後退を見逃すのを防ぐ(Swift が無ければ自動でスキップ)
-- `ios/SIOPApp/UITests/EndToEndRPTests.swift` — Safari 上の RP からアプリを起動し、
-  発行されたトークンが RP で検証されるまでを通す
-- `ios/SIOPKit` の `siop-issue` CLI が、任意のリクエストに対するトークンを吐く。
-  他言語の実装を足すときは、まずこの CLI の出力を自分の検証器に通すところから始められる
+The more implementations there are, the easier it is for each to stay self-consistently wrong.
+To prevent that, verification is always handed to a *different* implementation than the one that
+produced the token.
 
-新しい実装を追加するときは、`rp/` の RP で認証が通ることをもって最低限の適合とする。
+- `rp/test/verify.test.mjs` — JavaScript verifies a real ID Token signed by Swift (SIOPKit). The
+  token is committed as a fixture, so the suite runs without a Swift toolchain
+- `rp/test/cross-implementation.test.mjs` — the same checks against whatever the *current* Swift
+  build produces, so a stale fixture cannot hide an interoperability regression. Skipped
+  automatically where SIOPKit cannot be built
+- `ios/SIOPApp/UITests/EndToEndRPTests.swift` — drives the RP in Safari, hands the request to the
+  app, and follows the issued token through to the RP verifying it
+- `ios/SIOPKit`'s `siop-issue` CLI prints a token for any request. When adding an implementation
+  in another language, feeding this output to your own verifier is the place to start
+
+A new implementation counts as minimally conformant once authentication succeeds against the RP
+in `rp/`.

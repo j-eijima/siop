@@ -1,44 +1,48 @@
-# SIOP - iOS 実装
+# SIOP — iOS
 
-OpenID Connect Core 1.0 7章 Self-Issued OpenID Provider (SIOP) の Swift 実装。
+**English** | [日本語](README.ja.md)
+
+Swift implementation of the Self-Issued OpenID Provider defined in Section 7 of
+OpenID Connect Core 1.0.
 
 ## SIOPKit
 
-コアロジックの Swift Package。外部依存なし(Security / CryptoKit のみ)。
+The core logic, as a Swift Package. No external dependencies — only Security and CryptoKit.
 
 ```
 cd SIOPKit
-swift build   # ビルド
-swift test    # ユニットテスト(macOS 上で実行可)
+swift build   # build
+swift test    # unit tests (runnable on macOS)
 ```
 
-### 仕様との対応
+### What implements what
 
-| 仕様 | 実装 |
+| Section | Implementation |
 |---|---|
-| 7.1 Discovery(静的メタデータ) | `SelfIssuedMetadata` |
-| 7.2 Registration(client_id = redirect_uri) | `AuthorizationRequest` の検証 |
-| 7.3 Request の解析・検証 | `AuthorizationRequest(url:)` |
-| 7.4 Response(Self-Issued ID Token 発行) | `SelfIssuedOP.handle(url:)` / `SelfIssuedIDToken` |
-| 7.5 RP 側の ID Token 検証 | `SelfIssuedIDTokenValidator` |
-| RFC 7638 JWK Thumbprint(`sub` 値) | `RSAPublicJWK.thumbprint()` |
+| 7.1 Discovery (static metadata) | `SelfIssuedMetadata` |
+| 7.2 Registration (client_id = redirect_uri) | validation in `AuthorizationRequest` |
+| 7.3 Parsing and validating the request | `AuthorizationRequest(url:)` |
+| 7.4 Issuing the Self-Issued ID Token | `SelfIssuedOP.handle(url:)` / `SelfIssuedIDToken` |
+| 7.5 RP-side ID Token validation | `SelfIssuedIDTokenValidator` |
+| RFC 7638 JWK thumbprint (the `sub` value) | `RSAPublicJWK.thumbprint()` |
 
-- 署名は仕様必須の RS256(RSA 2048bit)
-- 鍵は `SecKeyProvider.loadOrCreate(tag:)` で Keychain に永続化(`sub` をデバイス内で安定させる)。テストでは `generate()` の一時鍵を使用
+- Signing is RS256 with a 2048-bit RSA key, which the spec requires
+- `SecKeyProvider.loadOrCreate(tag:)` persists the key in the Keychain so that `sub` stays stable
+  for a given device. Tests use the ephemeral key from `generate()` instead
 
-### 使い方
+### Using it
 
 ```swift
 let key = try SecKeyProvider.loadOrCreate(tag: "jp.example.siop.key")
 let op = SelfIssuedOP(keyProvider: key)
 let response = try op.handle(url: incomingOpenIDURL)  // openid://?response_type=id_token&...
-// response.redirectURL を開いて RP に id_token をフラグメントで返す
+// Open response.redirectURL to hand the id_token back to the RP in the fragment
 ```
 
 ## SIOPApp
 
-`openid:` 認証エンドポイントを受け取る SwiftUI アプリ。プロジェクトは XcodeGen で
-`project.yml` から生成する(`.xcodeproj` は生成物なので Git 管理外)。
+A SwiftUI app that receives the `openid:` authorization endpoint. The Xcode project is generated
+from `project.yml` by XcodeGen, so `.xcodeproj` is not in version control.
 
 ```
 cd SIOPApp
@@ -47,24 +51,28 @@ xcodebuild -project SIOPApp.xcodeproj -scheme SIOPApp \
   -destination 'platform=iOS Simulator,name=iPhone 17' test
 ```
 
-### 画面と流れ
+### Screens and flow
 
-1. **識別子画面** — この端末が提示する `sub`(JWK サムプリント)、公開鍵、Discovery メタデータ
-2. **同意画面** — `openid://...` を受け取ると表示。要求元(`client_id` = `redirect_uri`)、
-   要求 scope、`nonce` / `state` を提示する。SIOP は RP を認証できないため、要求元 URL は
-   「検証されていない」と明示している
-3. **応答** — 承認で ID Token を発行し `redirect_uri#id_token=...&state=...` を開く。
-   拒否時は Section 3.1.2.6 に従い `#error=access_denied` を返す
+1. **Identity** — the `sub` this device presents (a JWK thumbprint), its public key, and the
+   Discovery metadata
+2. **Consent** — shown on receiving `openid://...`. It presents the requester
+   (`client_id` = `redirect_uri`), the requested scopes, and the `nonce` / `state`. A SIOP cannot
+   authenticate the RP, so the requester's URL is labelled as unverified rather than dressed up
+   as a trusted identity
+3. **Response** — approving issues an ID Token and opens
+   `redirect_uri#id_token=...&state=...`. Refusing returns `#error=access_denied`,
+   as Section 3.1.2.6 prescribes
 
-### RP と合わせた動作確認
+### Trying it against the RP
 
-`rp/` のテスト RP を起動すると、リクエスト送信から ID Token の検証まで一通り試せる。
+Start the test RP in `rp/` to exercise everything from sending a request through to verifying the
+ID Token.
 
 ```
-python3 ../rp/serve.py     # 別ターミナルで
+python3 ../rp/serve.py     # in another terminal
 ```
 
-### 単体での動作確認
+### Trying it on its own
 
 ```
 xcrun simctl openurl booted "openid://?response_type=id_token\
@@ -72,12 +80,18 @@ xcrun simctl openurl booted "openid://?response_type=id_token\
 &state=af0ifjsldkj&nonce=n-0S6_WzA2Mj"
 ```
 
-UI テスト(`UITests/`)は `XCUIApplication.open(_:)` で同じ経路を再現し、同意 → 承認 /
-拒否 / 不正リクエストの各画面を検証する。`EndToEndRPTests` は Safari 上の `rp/` から
-リクエストを送り、検証成功まで到達することを確認する(RP サーバの起動が前提)。
+### How the tests divide the work
+
+- `AuthenticationFlowUITests` — covers the consent screen and the response produced on approval,
+  refusal, and a malformed request. The request is injected through a launch argument (DEBUG
+  builds only): `XCUIApplication.open(_:)` delivers the URL on some iOS versions and merely
+  launches the app on others, and these tests are not about URL routing
+- `EndToEndRPTests` — covers the real `openid:` route. It follows a link in the RP served from
+  `rp/` in Safari, hands off to the app, and checks that the issued token reaches the RP and
+  verifies (needs the RP server running)
 
 ## TODO
 
-- request / request_uri(Request Object、alg none / RS256)対応
-- claims パラメータに応じた標準クレームの応答
-- 承認済み RP の履歴表示
+- `request` / `request_uri` support (Request Object, alg none / RS256)
+- Returning standard claims according to the `claims` parameter
+- A history of previously approved RPs
