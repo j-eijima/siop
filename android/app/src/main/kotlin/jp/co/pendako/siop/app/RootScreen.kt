@@ -19,8 +19,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 
+/**
+ * @param onRespond opens the RP's redirect URI, returning false when no app can
+ *   handle it.
+ */
 @Composable
-fun RootScreen(session: AuthenticationSession, onRespond: (String) -> Unit) {
+fun RootScreen(session: AuthenticationSession, onRespond: (String) -> Boolean) {
     when (val phase = session.phase) {
         is AuthenticationSession.Phase.Idle ->
             IdentityScreen(session.identity)
@@ -28,8 +32,8 @@ fun RootScreen(session: AuthenticationSession, onRespond: (String) -> Unit) {
         is AuthenticationSession.Phase.Consent ->
             ConsentScreen(
                 request = phase.request,
-                onApprove = { session.approve(phase.request)?.let(onRespond) },
-                onDecline = { onRespond(session.decline(phase.request)) },
+                onApprove = { session.approve(phase.request, onRespond) },
+                onDecline = { session.decline(phase.request, onRespond) },
             )
 
         is AuthenticationSession.Phase.Sent ->
@@ -45,6 +49,15 @@ fun RootScreen(session: AuthenticationSession, onRespond: (String) -> Unit) {
                 title = "リクエストを拒否しました",
                 message = "${phase.clientId} に access_denied を返しました。",
                 detail = null,
+                onClose = session::reset,
+            )
+
+        is AuthenticationSession.Phase.Undeliverable ->
+            ResultScreen(
+                title = "応答を渡せませんでした",
+                message = "${phase.clientId} を開けるアプリがありません。" +
+                    "ID Token は発行済みですが、RP には届いていません。",
+                detail = phase.redirectUrl,
                 onClose = session::reset,
             )
 

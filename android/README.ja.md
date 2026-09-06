@@ -72,7 +72,9 @@ gradle :siop-issue:run --args="openid://?response_type=id_token&client_id=...&sc
    要求 scope、`nonce` / `state` を提示する。SIOP は RP を認証できないため、要求元 URL は
    「検証されていない」と明示している
 3. **応答** — 承認で ID Token を発行し `redirect_uri#id_token=...&state=...` を開く。
-   拒否時は Section 3.1.2.6 に従い `#error=access_denied` を返す
+   拒否時は Section 3.1.2.6 に従い `#error=access_denied` を返す。Section 7.2 では `client_id`
+   に任意の URI を書けるため、端末に開けるアプリが無い場合もある。その場合は届いたことに
+   せず、渡せなかったと表示する
 
 署名鍵は Android Keystore に置く(`SiopKeyStore`)。`sub` が起動をまたいで同じになり、
 秘密鍵はキーストアの外に出ない。

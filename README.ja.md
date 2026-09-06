@@ -79,6 +79,17 @@ cd rp && node --test
 
 新しい実装を追加するときは、`rp/` の RP で認証が通ることをもって最低限の適合とする。
 
+## push の前に
+
+```
+tools/install-hooks.sh
+```
+
+push しようとしているコミットに対して Codex の adversarial review を実行し、承認が出ない限り
+push を拒否する pre-push フックを入れる。ローカルの Codex CLI を各自の認証情報で動かすため
+CI では動かせず、フックを入れたマシンからの push しか守れない。フックは clone に含まれないので
+clone ごとに一度実行する。個別に無視する場合は `git push --no-verify`。
+
 ## ドキュメント
 
 対応自然言語は英語と日本語。自身を説明するディレクトリにはそれぞれ `README.md` と

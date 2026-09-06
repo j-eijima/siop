@@ -61,7 +61,8 @@ xcodebuild -project SIOPApp.xcodeproj -scheme SIOPApp \
    as a trusted identity
 3. **Response** — approving issues an ID Token and opens
    `redirect_uri#id_token=...&state=...`. Refusing returns `#error=access_denied`,
-   as Section 3.1.2.6 prescribes
+   as Section 3.1.2.6 prescribes. Section 7.2 lets `client_id` name any URI, so the redirect can
+   be one nothing on the device opens; that is reported rather than counted as delivered
 
 ### Trying it against the RP
 

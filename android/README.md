@@ -77,7 +77,8 @@ A Compose app that receives the `openid:` authorization endpoint.
    trusted identity
 3. **Response** — approving issues an ID Token and opens
    `redirect_uri#id_token=...&state=...`. Refusing returns `#error=access_denied`, as
-   Section 3.1.2.6 prescribes
+   Section 3.1.2.6 prescribes. Section 7.2 lets `client_id` name any URI, so the redirect can be
+   one no installed app opens; that is reported rather than counted as delivered
 
 The signing key lives in the Android Keystore (`SiopKeyStore`), so `sub` is the same on every
 launch and the private key never leaves the keystore.

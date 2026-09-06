@@ -11,6 +11,8 @@ final class AuthenticationSession: ObservableObject {
         case consent(AuthorizationRequest)
         case sent(clientID: String, redirectURL: URL)
         case declined(clientID: String)
+        /// The response was built but could not be delivered to the RP.
+        case undeliverable(clientID: String, redirectURL: URL)
         case failed(String)
     }
 
@@ -87,8 +89,9 @@ final class AuthenticationSession: ObservableObject {
         }
         do {
             let response = try op.respond(to: request)
-            phase = .sent(clientID: request.clientID, redirectURL: response.redirectURL)
-            UIApplication.shared.open(response.redirectURL)
+            deliver(response.redirectURL, to: request.clientID) { clientID, url in
+                .sent(clientID: clientID, redirectURL: url)
+            }
         } catch {
             phase = .failed(Self.describe(error))
         }
@@ -96,9 +99,29 @@ final class AuthenticationSession: ObservableObject {
 
     /// Section 3.1.2.6: tell the RP the user declined rather than leaving it hanging.
     func decline(_ request: AuthorizationRequest) {
-        phase = .declined(clientID: request.clientID)
-        if let response = try? AuthenticationErrorResponse(request: request) {
-            UIApplication.shared.open(response.redirectURL)
+        do {
+            let response = try AuthenticationErrorResponse(request: request)
+            deliver(response.redirectURL, to: request.clientID) { clientID, _ in
+                .declined(clientID: clientID)
+            }
+        } catch {
+            phase = .failed(Self.describe(error))
+        }
+    }
+
+    /// Hands the response to the RP, reporting the outcome rather than assuming
+    /// one. A `client_id` may name any scheme (Section 7.2), including one no
+    /// installed app handles, so the redirect can legitimately fail to open.
+    private func deliver(
+        _ redirectURL: URL,
+        to clientID: String,
+        onSuccess: @escaping (String, URL) -> Phase
+    ) {
+        UIApplication.shared.open(redirectURL) { [weak self] opened in
+            guard let self else { return }
+            self.phase = opened
+                ? onSuccess(clientID, redirectURL)
+                : .undeliverable(clientID: clientID, redirectURL: redirectURL)
         }
     }
 

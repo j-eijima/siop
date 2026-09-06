@@ -85,6 +85,18 @@ produced the token.
 A new implementation counts as minimally conformant once authentication succeeds against the RP
 in `rp/`.
 
+## Before pushing
+
+```
+tools/install-hooks.sh
+```
+
+Installs a pre-push hook that runs an adversarial Codex review over exactly the commits being
+pushed and refuses the push unless it comes back approved. It drives the local Codex CLI under
+your own credentials, so it cannot run in CI, and it only guards pushes from a machine where it
+is installed. Hooks are not cloned, so run this once per clone. Override a single push with
+`git push --no-verify`.
+
 ## Documentation
 
 English and Japanese are both supported. Every directory that documents itself carries

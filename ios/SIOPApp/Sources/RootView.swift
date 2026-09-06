@@ -20,6 +20,14 @@ struct RootView: View {
                         message: "\(clientID) に応答を送信しました。",
                         detail: redirectURL.absoluteString
                     )
+                case let .undeliverable(clientID, redirectURL):
+                    ResultView(
+                        symbol: "arrow.uturn.left.circle.fill",
+                        tint: .orange,
+                        title: "応答を渡せませんでした",
+                        message: "\(clientID) を開けるアプリがありません。ID Token は発行済みですが、RP には届いていません。",
+                        detail: redirectURL.absoluteString
+                    )
                 case let .declined(clientID):
                     ResultView(
                         symbol: "hand.raised.fill",

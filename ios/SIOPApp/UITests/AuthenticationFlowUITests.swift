@@ -82,6 +82,17 @@ final class AuthenticationFlowUITests: XCTestCase {
         attachScreenshot(app, named: "declined")
     }
 
+    func testARedirectNothingCanOpenIsReportedRatherThanClaimingSuccess() {
+        // Section 7.2 lets client_id be any URI, including a scheme no app
+        // handles. The token is issued but never reaches the RP.
+        let app = launch(query: "response_type=id_token&scope=openid&nonce=n1&client_id=com.example.nothing.handles.this%3A%2F%2Fcb")
+
+        XCTAssertTrue(app.buttons["この識別子で応答する"].waitForExistence(timeout: 20))
+        app.buttons["この識別子で応答する"].tap()
+
+        XCTAssertTrue(app.staticTexts["応答を渡せませんでした"].waitForExistence(timeout: 20))
+    }
+
     func testUnsupportedResponseTypeIsRejected() {
         // Section 7.1: a Self-Issued OP supports only response_type=id_token.
         let app = launch(query: "response_type=code&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid&nonce=n1")

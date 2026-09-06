@@ -1,0 +1,63 @@
+#!/bin/sh
+# Runs an adversarial Codex review over exactly what is about to be pushed, and
+# refuses the push unless it comes back approved.
+#
+# This cannot live in GitHub Actions: it drives the local Codex CLI under your
+# own credentials. It therefore only guards pushes from a machine where it is
+# installed — see tools/install-hooks.sh.
+#
+# Bypass a single push with `git push --no-verify`.
+set -eu
+
+COMPANION="$HOME/.claude/plugins/cache/openai-codex/codex/1.0.6/scripts/codex-companion.mjs"
+EMPTY_SHA="0000000000000000000000000000000000000000"
+
+if [ ! -f "$COMPANION" ]; then
+    echo "pre-push: Codex companion not found at $COMPANION" >&2
+    echo "pre-push: install the codex plugin, or push with --no-verify" >&2
+    exit 1
+fi
+
+status=0
+
+# git feeds one line per ref being pushed: <local ref> <local sha> <remote ref> <remote sha>
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+    # Deleting a branch pushes nothing to review.
+    [ "$local_sha" = "$EMPTY_SHA" ] && continue
+
+    if [ "$remote_sha" = "$EMPTY_SHA" ]; then
+        # A branch the remote does not have yet: review it against the default
+        # branch, or against its root when there is nothing to compare to.
+        base=$(git merge-base "$local_sha" origin/main 2>/dev/null || true)
+        [ -n "$base" ] || base=$(git rev-list --max-parents=0 "$local_sha" | tail -1)
+    else
+        base="$remote_sha"
+    fi
+
+    if [ "$base" = "$local_sha" ]; then
+        echo "pre-push: nothing new to review."
+        continue
+    fi
+
+    count=$(git rev-list --count "$base..$local_sha")
+    echo "pre-push: reviewing $count commit(s) against $(git rev-parse --short "$base")..."
+
+    output=$(node "$COMPANION" adversarial-review --wait --base "$base" 2>&1) || status=$?
+    printf '%s\n' "$output"
+
+    if [ "$status" -ne 0 ]; then
+        echo "pre-push: the review did not complete. Push refused." >&2
+        exit "$status"
+    fi
+
+    # The verdict line is what decides; a review that ran but found problems
+    # still exits zero.
+    if ! printf '%s' "$output" | grep -qi '^Verdict: *approve'; then
+        echo >&2
+        echo "pre-push: the review did not approve these changes. Push refused." >&2
+        echo "pre-push: address the findings, or push with --no-verify to override." >&2
+        exit 1
+    fi
+done
+
+echo "pre-push: approved."

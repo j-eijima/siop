@@ -1,5 +1,6 @@
 package jp.co.pendako.siop.app
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -51,10 +52,19 @@ class MainActivity : ComponentActivity() {
     /**
      * Hands the response to the RP. The browser that started the request cannot
      * be named, so this goes to whichever app handles the redirect URI.
+     *
+     * Returns false when nothing can open it. A `client_id` may name any
+     * scheme (Section 7.2), including one no installed app handles, so this is
+     * an outcome to report rather than a crash to let happen.
      */
-    private fun openRedirect(url: String) {
+    private fun openRedirect(url: String): Boolean = try {
         startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
+        true
+    } catch (cause: ActivityNotFoundException) {
+        false
+    } catch (cause: SecurityException) {
+        false
     }
 }

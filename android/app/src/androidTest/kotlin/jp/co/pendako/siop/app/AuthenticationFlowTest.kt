@@ -40,7 +40,7 @@ class AuthenticationFlowTest {
         return session
     }
 
-    private fun show(session: AuthenticationSession, onRespond: (String) -> Unit = {}) {
+    private fun show(session: AuthenticationSession, onRespond: (String) -> Boolean = { true }) {
         composeRule.setContent { RootScreen(session = session, onRespond = onRespond) }
     }
 
@@ -59,7 +59,7 @@ class AuthenticationFlowTest {
     @Test
     fun approvalReturnsAVerifiableTokenToTheRp() {
         var redirect: String? = null
-        show(session()) { redirect = it }
+        show(session()) { redirect = it; true }
 
         composeRule.onNodeWithText("この識別子で応答する").performClick()
         composeRule.waitForIdle()
@@ -82,7 +82,7 @@ class AuthenticationFlowTest {
     @Test
     fun refusalReturnsAccessDenied() {
         var redirect: String? = null
-        show(session()) { redirect = it }
+        show(session()) { redirect = it; true }
 
         composeRule.onNodeWithText("拒否する").performClick()
         composeRule.waitForIdle()
@@ -90,6 +90,31 @@ class AuthenticationFlowTest {
         // Section 3.1.2.6
         assertEquals("$clientId#error=access_denied&state=af0ifjsldkj", redirect)
         composeRule.onNodeWithText("リクエストを拒否しました").assertIsDisplayed()
+    }
+
+    @Test
+    fun aRedirectNothingCanOpenIsReportedRatherThanCrashing() {
+        // Section 7.2 lets client_id be any URI, including a scheme no app
+        // handles. The token is issued but never reaches the RP.
+        val unreachable = "com.example.nothing.handles.this://cb"
+        val request =
+            "openid://?response_type=id_token&scope=openid&nonce=n1&client_id=" +
+                java.net.URLEncoder.encode(unreachable, "UTF-8")
+
+        show(session(request), onRespond = { false })
+        composeRule.onNodeWithText("この識別子で応答する").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("応答を渡せませんでした").assertIsDisplayed()
+    }
+
+    @Test
+    fun aRefusalThatCannotBeDeliveredIsReported() {
+        show(session(), onRespond = { false })
+        composeRule.onNodeWithText("拒否する").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("応答を渡せませんでした").assertIsDisplayed()
     }
 
     @Test

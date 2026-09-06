@@ -21,6 +21,8 @@ class AuthenticationSession(keyProvider: KeyPairProvider?, keyFailure: String? =
         data class Consent(val request: AuthorizationRequest) : Phase
         data class Sent(val clientId: String, val redirectUrl: String) : Phase
         data class Declined(val clientId: String) : Phase
+        /** The response was built but could not be delivered to the RP. */
+        data class Undeliverable(val clientId: String, val redirectUrl: String) : Phase
         data class Failed(val message: String) : Phase
     }
 
@@ -44,26 +46,41 @@ class AuthenticationSession(keyProvider: KeyPairProvider?, keyFailure: String? =
         }
     }
 
-    /** Returns the URL to open so the RP receives the response, or null on failure. */
-    fun approve(request: AuthorizationRequest): String? {
+    /**
+     * Issues the token and hands the response to [deliver], which reports
+     * whether the redirect URI could actually be opened.
+     *
+     * The phase only becomes [Phase.Sent] once delivery succeeded: a
+     * `client_id` naming a scheme no installed app handles is a valid request
+     * by Section 7.2, so failing to reach the RP is an expected outcome, not
+     * an impossible one.
+     */
+    fun approve(request: AuthorizationRequest, deliver: (String) -> Boolean) {
         val op = op ?: run {
             phase = Phase.Failed("鍵が利用できません")
-            return null
+            return
         }
-        return try {
-            val response = op.respond(request)
-            phase = Phase.Sent(request.clientId, response.redirectUrl)
-            response.redirectUrl
+        val redirectUrl = try {
+            op.respond(request).redirectUrl
         } catch (cause: Exception) {
             phase = Phase.Failed(describe(cause))
-            null
+            return
+        }
+        phase = if (deliver(redirectUrl)) {
+            Phase.Sent(request.clientId, redirectUrl)
+        } else {
+            Phase.Undeliverable(request.clientId, redirectUrl)
         }
     }
 
     /** Section 3.1.2.6: tell the RP the user declined rather than leaving it waiting. */
-    fun decline(request: AuthorizationRequest): String {
-        phase = Phase.Declined(request.clientId)
-        return AuthenticationErrorResponse(request).redirectUrl
+    fun decline(request: AuthorizationRequest, deliver: (String) -> Boolean) {
+        val redirectUrl = AuthenticationErrorResponse(request).redirectUrl
+        phase = if (deliver(redirectUrl)) {
+            Phase.Declined(request.clientId)
+        } else {
+            Phase.Undeliverable(request.clientId, redirectUrl)
+        }
     }
 
     fun reset() {
