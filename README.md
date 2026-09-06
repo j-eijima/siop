@@ -87,6 +87,17 @@ in `rp/`.
 
 ## Documentation
 
-English and Japanese are both supported, and every `*.md` here exists in both. `CLAUDE.md` is the
-exception: it instructs the coding agent rather than documenting the project, in the same way
-that `.gitignore` and `project.yml` are not translated either.
+English and Japanese are both supported. Every directory that documents itself carries
+`README.md` and `README.ja.md`, and each links to the other. English is the canonical version:
+change it first, and change the Japanese in the same commit — never one alone.
+
+```
+python3 tools/check-docs.py
+```
+
+Whether a translation says the same thing is a human judgement, but the ways a pair falls apart
+are mechanical, so they are checked and enforced in CI: a missing counterpart, a section added on
+one side only, a missing language switcher, a dead relative link.
+
+Configuration for a coding agent is not documentation and is not part of this — a local
+`CLAUDE.md` is ignored, the way `.gitignore` and `project.yml` are not translated either.
