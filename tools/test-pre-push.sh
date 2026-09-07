@@ -59,8 +59,10 @@ run_hook() {
 reviews() { wc -l < "$WORK/reviews" | tr -d ' '; }
 
 # A repository with a remote and three commits.
-git init -q --bare "$WORK/remote.git"
-git init -q "$WORK/repo"
+# -b main explicitly: the branch a fresh repository gets depends on
+# init.defaultBranch, and the pushes below name main.
+git init -q -b main --bare "$WORK/remote.git"
+git init -q -b main "$WORK/repo"
 cd "$WORK/repo"
 git config user.email t@example.com
 git config user.name Test
@@ -120,7 +122,7 @@ check "a new ref sharing history with the destination is reviewed" "0" "$rc"
 
 # A different, empty destination advertises nothing, even though the local
 # origin/main would look like a baseline.
-git init -q --bare "$WORK/other.git"
+git init -q -b main --bare "$WORK/other.git"
 : > "$WORK/reviews"
 run_hook "refs/heads/main $HEAD_SHA refs/heads/main $ZERO" other "$WORK/other.git" && rc=0 || rc=$?
 check "an empty second destination is refused" "1" "$rc"
