@@ -38,11 +38,27 @@ final class AuthenticationSession: ObservableObject {
     /// cannot overwrite whatever replaced it.
     private var requestGeneration = 0
 
-    init() {
-        let (store, isPersistent) = Self.makeKeyStore()
-        op = SelfIssuedOP(keyStore: store)
-        keyState = KeyState(isPersistent: isPersistent)
+    /// `open` delivers the response to the RP, reporting whether anything
+    /// could handle the URL. Injected so the delivery race can be tested
+    /// without a real redirect.
+    init(
+        keyStore: SIOPKeyStore? = nil,
+        open: @escaping (URL, @escaping (Bool) -> Void) -> Void = { url, completion in
+            UIApplication.shared.open(url, completionHandler: completion)
+        }
+    ) {
+        self.openURL = open
+        if let keyStore {
+            op = SelfIssuedOP(keyStore: keyStore)
+            keyState = KeyState(isPersistent: false)
+        } else {
+            let (store, isPersistent) = Self.makeKeyStore()
+            op = SelfIssuedOP(keyStore: store)
+            keyState = KeyState(isPersistent: isPersistent)
+        }
     }
+
+    private let openURL: (URL, @escaping (Bool) -> Void) -> Void
 
     /// Prefers Keychain-backed keys so subjects stay stable across launches,
     /// falling back to ephemeral ones so the app remains usable.
@@ -137,7 +153,7 @@ final class AuthenticationSession: ObservableObject {
         // while the first response is still on its way.
         phase = .delivering(clientID: clientID)
 
-        open(redirectURL) { [weak self] opened in
+        openURL(redirectURL) { [weak self] opened in
             guard let self, generation == self.requestGeneration else { return }
             self.phase = opened
                 ? onSuccess(clientID, redirectURL)
@@ -145,32 +161,7 @@ final class AuthenticationSession: ObservableObject {
         }
     }
 
-    private func open(_ url: URL, completion: @escaping (Bool) -> Void) {
-#if DEBUG
-        // UI tests use this to hold a delivery open while another request
-        // arrives, which is the race the generation check exists for.
-        if let delay = Self.deliveryDelayForTesting {
-            UIApplication.shared.open(url) { opened in
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { completion(opened) }
-            }
-            return
-        }
-#endif
-        UIApplication.shared.open(url, completionHandler: completion)
-    }
 
-#if DEBUG
-    static let deliveryDelayLaunchArgument = "-siopDeliveryDelaySeconds"
-
-    private static var deliveryDelayForTesting: TimeInterval? {
-        let arguments = ProcessInfo.processInfo.arguments
-        guard let flag = arguments.firstIndex(of: deliveryDelayLaunchArgument),
-              arguments.index(after: flag) < arguments.endIndex,
-              let seconds = TimeInterval(arguments[arguments.index(after: flag)])
-        else { return nil }
-        return seconds
-    }
-#endif
 
     func reset() {
         requestGeneration += 1

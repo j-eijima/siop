@@ -16,12 +16,9 @@ final class AuthenticationFlowUITests: XCTestCase {
         super.tearDown()
     }
 
-    private func launch(query: String, deliveryDelaySeconds: String? = nil) -> XCUIApplication {
+    private func launch(query: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-siopRequestURL", "openid://?\(query)"]
-        if let deliveryDelaySeconds {
-            app.launchArguments += ["-siopDeliveryDelaySeconds", deliveryDelaySeconds]
-        }
         app.launch()
         return app
     }
@@ -95,29 +92,6 @@ final class AuthenticationFlowUITests: XCTestCase {
         app.buttons["この識別子で応答する"].tap()
 
         XCTAssertTrue(app.staticTexts["応答を渡せませんでした"].waitForExistence(timeout: 20))
-    }
-
-    /// Opening a redirect completes asynchronously, so a second request can
-    /// arrive first. The late completion must not replace what it found.
-    func testACompletionArrivingAfterANewRequestDoesNotOverwriteIt() {
-        let app = launch(
-            query: "response_type=id_token&scope=openid&nonce=n1&client_id=com.example.nothing.handles.this%3A%2F%2Fcb",
-            deliveryDelaySeconds: "6"
-        )
-        XCTAssertTrue(app.buttons["この識別子で応答する"].waitForExistence(timeout: 20))
-        app.buttons["この識別子で応答する"].tap()
-        XCTAssertTrue(app.staticTexts["応答を返しています"].waitForExistence(timeout: 10))
-
-        // A second request while the first delivery is still outstanding.
-        app.open(URL(string: "openid://?response_type=id_token&scope=openid&nonce=n2&client_id=https%3A%2F%2Fsecond.example.org%2Fcb")!)
-        XCTAssertTrue(app.staticTexts["https://second.example.org/cb"].waitForExistence(timeout: 20))
-
-        // Long enough for the first delivery to complete behind it.
-        XCTAssertFalse(
-            app.staticTexts["応答を渡せませんでした"].waitForExistence(timeout: 10),
-            "古い応答の完了が新しいリクエストの画面を上書きしている"
-        )
-        XCTAssertTrue(app.staticTexts["https://second.example.org/cb"].exists)
     }
 
     /// An OP is opened from whatever the user was already doing, so it has to

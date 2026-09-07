@@ -88,6 +88,10 @@ xcrun simctl openurl booted "openid://?response_type=id_token\
 
 ### テストの分担
 
+- `AuthenticationSessionTests` — 応答を渡している最中の挙動が対象。画面の話ではなく状態の話
+  なのでここに置く。配送中は同意画面が消えること、開けない redirect が報告されること、新しい
+  リクエストの後に届いた完了がそれを上書きしないこと。配送手段を注入するので割り込みの順序を
+  正確に作れる
 - `AuthenticationFlowUITests` — 同意画面と、承認 / 拒否 / 不正リクエストに対する応答が対象。
   リクエストは起動引数(DEBUG ビルドのみ)で直接渡す。`XCUIApplication.open(_:)` は iOS の
   バージョンによって URL を配送したりしなかったりするため、URL ルーティングを対象としない

@@ -93,6 +93,10 @@ xcrun simctl openurl booted "openid://?response_type=id_token\
 
 ### How the tests divide the work
 
+- `AuthenticationSessionTests` — covers what happens while a response is being delivered, which
+  is a question about state rather than about any screen: the consent screen is gone while
+  delivery is outstanding, a redirect nothing opens is reported, and a completion arriving after
+  a newer request cannot replace it. Delivery is injected, so the interleaving is exact
 - `AuthenticationFlowUITests` — covers the consent screen and the response produced on approval,
   refusal, and a malformed request. The request is injected through a launch argument (DEBUG
   builds only): `XCUIApplication.open(_:)` delivers the URL on some iOS versions and merely

@@ -45,6 +45,32 @@ targets:
         SWIFT_VERSION: "5.9"
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Automatic
+  SIOPAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+    dependencies:
+      - target: SIOPApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: jp.co.pendako.siop.tests
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES
+
+  SIOPAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+    dependencies:
+      - target: SIOPApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: jp.co.pendako.siop.tests
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES
+
   SIOPAppUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -63,10 +89,12 @@ schemes:
     build:
       targets:
         SIOPApp: all
+        SIOPAppTests: [test]
         SIOPAppUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
+        - SIOPAppTests
         - SIOPAppUITests
