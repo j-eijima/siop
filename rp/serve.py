@@ -62,9 +62,11 @@ def lan_address():
 def certificate_for(host):
     """A self-signed certificate naming `host`, generated once and reused.
 
-    Regenerated when the address changes, since a certificate that does not
-    name the host the browser asked for is rejected outright rather than
-    warned about.
+    Shaped to Apple's requirements for TLS server certificates: a
+    subjectAltName for the host, extendedKeyUsage of serverAuth, not a CA, and
+    a lifetime under 825 days. A certificate that misses any of these is
+    rejected outright — Safari offers no way past it, so it looks like the
+    server is broken rather than untrusted.
     """
     CERT_DIR.mkdir(exist_ok=True)
     cert, key = CERT_DIR / f"{host}.crt", CERT_DIR / f"{host}.key"
@@ -78,6 +80,9 @@ def certificate_for(host):
             "-keyout", str(key), "-out", str(cert), "-days", "365",
             "-subj", f"/CN={host}",
             "-addext", f"subjectAltName={subject_alt},DNS:localhost,IP:127.0.0.1",
+            "-addext", "extendedKeyUsage=serverAuth",
+            "-addext", "keyUsage=digitalSignature,keyEncipherment",
+            "-addext", "basicConstraints=critical,CA:FALSE",
         ],
         check=True,
         capture_output=True,
