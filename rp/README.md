@@ -14,10 +14,18 @@ so the ID Token never reaches one.
 
 ```
 python3 serve.py            # http://localhost:8080/
+python3 serve.py --tls      # https://<this Mac's LAN address>:8443/
 python3 serve.py --port 9000
 ```
 
 It only serves static files. There are no dependencies to install.
+
+`--tls` is what makes the RP usable from a phone or tablet. Verification runs on WebCrypto,
+which is only available in a secure context: `http://localhost` counts as one, a LAN address over
+plain HTTP does not. The certificate is self-signed and generated on first use, so the browser
+warns once; accepting the warning makes the origin secure, and nothing has to be installed on the
+device. A name from a wildcard DNS service would not help — the secure-context rule is about the
+scheme, not the name.
 
 ## Using it
 
@@ -79,7 +87,7 @@ The end-to-end test that includes the iOS app is
   that started the request. Starting in a different browser means the response never arrives, and
   the localStorage holding the nonce and state is not reachable either, so the check fails. It
   fails closed: it never succeeds incorrectly.
-- To use it from a physical device, open the Mac's LAN address (`client_id` and `redirect_uri`
-  follow whatever URL the page is served from). Browsers do not treat plain HTTP on a LAN address
-  as a secure context, though, so WebCrypto — and therefore verification — will not run there.
-  Getting that far on a device needs HTTPS or a tunnel.
+- To use it from a physical device, run `python3 serve.py --tls` and open the Mac's LAN address
+  over https (`client_id` and `redirect_uri` follow whatever URL the page is served from). Over
+  plain http the page loads but cannot verify anything, because WebCrypto is unavailable outside
+  a secure context.

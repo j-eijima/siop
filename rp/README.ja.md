@@ -12,10 +12,17 @@ Self-Issued OpenID Provider (OpenID Connect Core 1.0 7章) の動作確認用 Re
 
 ```
 python3 serve.py            # http://localhost:8080/
+python3 serve.py --tls      # https://<この Mac の LAN アドレス>:8443/
 python3 serve.py --port 9000
 ```
 
 静的ファイルを配るだけで、依存パッケージは無い。
+
+スマホやタブレットから使うには `--tls` が要る。検証は WebCrypto で行うが、これは secure context
+でしか使えず、`http://localhost` は該当するのに LAN アドレスの平文 HTTP は該当しないため。証明書は
+初回に自己署名で生成する。ブラウザが一度警告を出すが、承認すればその origin は secure context に
+なり、端末側には何もインストールしなくてよい。ワイルドカード DNS で名前を付けても解決しない —
+secure context の判定はスキームであって名前ではない。
 
 ## 使い方
 
@@ -75,6 +82,6 @@ iOS アプリまで含めた end-to-end テストは
   既定ブラウザに渡すため、リクエストを始めたブラウザに戻す方法が無い。別のブラウザで始めると
   応答が届かず、nonce / state を保持している localStorage も参照できないため照合に失敗する
   (誤って成功する方向には倒れない)。
-- 実機から使う場合は Mac の LAN アドレスで開く(`client_id` / `redirect_uri` は開いている URL に
-  追従する)。ただしブラウザは LAN アドレスの平文 HTTP を secure context とみなさないため、
-  WebCrypto を使う検証は動かない。実機で検証まで通すには HTTPS かトンネルが要る。
+- 実機から使う場合は `python3 serve.py --tls` で起動し、Mac の LAN アドレスに https で接続する
+  (`client_id` / `redirect_uri` は開いている URL に追従する)。平文 http でもページは開くが、
+  secure context にならず WebCrypto が使えないため検証はできない。

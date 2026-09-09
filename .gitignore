@@ -13,3 +13,4 @@ ios/SIOPApp/Info.plist
 # Gradle
 .gradle/
 build/
+.tls/
