@@ -18,10 +18,14 @@ python3 serve.py --port 9000
 
 静的ファイルを配るだけで、依存パッケージは無い。
 
-スマホやタブレットから使うには `--tls` が要る。検証は WebCrypto で行うが、これは secure context
-でしか使えず、`http://localhost` は該当するのに LAN アドレスの平文 HTTP は該当しないため。証明書は
-初回に自己署名で生成する。ブラウザが一度警告を出すが、承認すればその origin は secure context に
-なり、端末側には何もインストールしなくてよい。ワイルドカード DNS で名前を付けても解決しない —
+検証は WebCrypto で行うが、これは secure context でしか使えない。`http://localhost` は該当するが
+LAN アドレスの平文 HTTP は該当しないため、LAN 越しに開いた端末ではページは表示されても検証は
+できない。
+
+`--tls` は自己署名証明書で HTTPS を提供する。デスクトップのブラウザなら警告を押し進められるので
+これで足りる。**iOS では足りない** — Safari は信頼できない証明書を押し進める手段ごと拒否するため、
+ページ自体が開かない。iPhone / iPad で検証まで通すには、証明書を端末に入れて信頼させるか、実際の
+証明書を持つ場所に RP を置くかのどちらかになる。ワイルドカード DNS で名前を付けても解決しない —
 secure context の判定はスキームであって名前ではない。
 
 ## 使い方
@@ -76,12 +80,24 @@ Node だけあれば動く。依存パッケージは無い。
 iOS アプリまで含めた end-to-end テストは
 `ios/SIOPApp/UITests/EndToEndRPTests.swift`(このサーバの起動が前提)。
 
+## ホスティング
+
+サーバは `$PORT` からポートを受け取り、ページは読み込まれた URL から `client_id` と
+`redirect_uri` を導出する。TLS を終端してポートを渡す環境なら設定なしで動く。`Dockerfile` が
+そのままイメージになる。
+
+```
+gcloud run deploy siop-rp --source rp --allow-unauthenticated
+```
+
+スマホやタブレットで試すなら、ホストしてしまうのが現実的。証明書が端末の信頼済みのものになる。
+
 ## 既知の制約
 
 - **既定のブラウザで開くこと。** OP は `redirect_uri` を開いて応答を返すが、iOS は https を
   既定ブラウザに渡すため、リクエストを始めたブラウザに戻す方法が無い。別のブラウザで始めると
   応答が届かず、nonce / state を保持している localStorage も参照できないため照合に失敗する
   (誤って成功する方向には倒れない)。
-- 実機から使う場合は `python3 serve.py --tls` で起動し、Mac の LAN アドレスに https で接続する
-  (`client_id` / `redirect_uri` は開いている URL に追従する)。平文 http でもページは開くが、
-  secure context にならず WebCrypto が使えないため検証はできない。
+- 検証には secure context が要るので、LAN アドレスの平文 http ではページは開いても検証できない。
+  デスクトップのブラウザなら `--tls` で足りるが、iOS では足りず、RP をホストするか証明書を端末に
+  信頼させる必要がある。

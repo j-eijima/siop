@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """Serves the test RP.
 
-Binds all interfaces so a device on the same network can reach it.
+Binds all interfaces so a device on the same network can reach it, and honours
+$PORT so it can be deployed as-is to a host that assigns one.
 
 WebCrypto — and therefore the verification this RP exists to show — only runs
 in a secure context. `http://localhost` counts as one; `http://192.168.x.x`
-does not, so a phone or tablet reaching the Mac over the LAN gets a page that
-cannot verify anything. Passing --tls serves HTTPS with a self-signed
-certificate instead: the browser will warn once, and accepting the warning
-makes the origin a secure context, with nothing installed on the device.
+does not, so a device reaching this over the LAN gets a page that loads and
+cannot verify anything.
+
+--tls serves HTTPS with a self-signed certificate, which is enough for a
+desktop browser where the warning can be clicked through. It is not enough for
+iOS: Safari rejects a certificate it does not trust outright, offering nothing
+to click, so a device needs the certificate installed and trusted or the RP
+needs to be served from somewhere with a real one.
 """
 
 import argparse
 import http.server
+import os
 import ipaddress
 import socket
 import socketserver
@@ -24,17 +30,72 @@ from pathlib import Path
 
 CERT_DIR = Path(__file__).parent / ".tls"
 
+# A client that connects and then says nothing must not hold a worker forever.
+HANDSHAKE_TIMEOUT_SECONDS = 10
+
 
 class Server(socketserver.ThreadingTCPServer):
-    """Listens on both stacks, so `localhost` works whichever one it resolves to."""
+    """IPv4 only. See [DualStackServer] and [listen]."""
 
-    address_family = socket.AF_INET6
     allow_reuse_address = True
     daemon_threads = True
+    tls_context = None
+
+    def get_request(self):
+        """Wraps each connection rather than the listening socket.
+
+        The handshake is deliberately deferred: doing it here would run it in
+        the accept loop, where one client that connects and never speaks would
+        stop every other connection from being served.
+        """
+        connection, address = self.socket.accept()
+        if self.tls_context is None:
+            return connection, address
+        wrapped = self.tls_context.wrap_socket(
+            connection, server_side=True, do_handshake_on_connect=False
+        )
+        return wrapped, address
+
+    def finish_request(self, request, client_address):
+        """Runs in a worker thread, which is where the handshake belongs.
+
+        A client that rejects the certificate fails here. Reporting it with the
+        address it came from is what distinguishes a device that will not accept
+        the certificate from one that never connected — otherwise both look like
+        silence.
+        """
+        if self.tls_context is not None:
+            request.settimeout(HANDSHAKE_TIMEOUT_SECONDS)
+            try:
+                request.do_handshake()
+            except (ssl.SSLError, OSError) as error:
+                print(f"{client_address[0]} - TLS handshake failed: {error}")
+                return
+            request.settimeout(None)
+        super().finish_request(request, client_address)
+
+
+class DualStackServer(Server):
+    """Serves both stacks, so `localhost` works whichever one it resolves to."""
+
+    address_family = socket.AF_INET6
 
     def server_bind(self):
         self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
         super().server_bind()
+
+
+def listen(port, handler):
+    """Prefers dual-stack, falls back to IPv4.
+
+    Not every container runtime has IPv6 at all, and refusing to start there —
+    when IPv4 would have served every request — would be a strange way for a
+    static file server to fail.
+    """
+    try:
+        return DualStackServer(("::", port), handler)
+    except OSError:
+        return Server(("0.0.0.0", port), handler)
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -107,13 +168,14 @@ def main():
     parser.add_argument("--host", help="the name to put in the certificate (default: this Mac's LAN address)")
     args = parser.parse_args()
 
-    port = args.port or (8443 if args.tls else 8080)
+    # $PORT is how a container host tells a program where to listen.
+    port = args.port or int(os.environ.get("PORT") or 0) or (8443 if args.tls else 8080)
     scheme = "https" if args.tls else "http"
     lan = args.host or lan_address()
 
     root = Path(__file__).parent / "public"
     handler = partial(Handler, directory=str(root))
-    httpd = Server(("::", port), handler)
+    httpd = listen(port, handler)
 
     if args.tls:
         try:
@@ -123,7 +185,7 @@ def main():
             return 1
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(cert, key)
-        httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+        httpd.tls_context = context
 
     print(f"{scheme}://localhost:{port}/")
     print(f"{scheme}://{lan}:{port}/   (from another device on this network)")

@@ -20,12 +20,17 @@ python3 serve.py --port 9000
 
 It only serves static files. There are no dependencies to install.
 
-`--tls` is what makes the RP usable from a phone or tablet. Verification runs on WebCrypto,
-which is only available in a secure context: `http://localhost` counts as one, a LAN address over
-plain HTTP does not. The certificate is self-signed and generated on first use, so the browser
-warns once; accepting the warning makes the origin secure, and nothing has to be installed on the
-device. A name from a wildcard DNS service would not help — the secure-context rule is about the
-scheme, not the name.
+Verification runs on WebCrypto, which is only available in a secure context: `http://localhost`
+counts as one, a LAN address over plain HTTP does not. A device reaching this over the LAN
+therefore gets a page that loads and cannot verify anything.
+
+`--tls` serves HTTPS with a self-signed certificate, generated on first use. That is enough for a
+desktop browser, where the warning can be clicked through. **It is not enough for iOS**: Safari
+rejects a certificate it does not trust outright, with nothing offered to click, so the page
+simply never loads. Getting an iPhone or iPad to verify means either installing and trusting the
+certificate on the device, or serving the RP from somewhere that has a real one. A name from a
+wildcard DNS service does not help either way — the secure-context rule is about the scheme, not
+the name.
 
 ## Using it
 
@@ -80,6 +85,19 @@ Refresh the fixture with `test/fixtures/regenerate.sh` (needs Swift).
 The end-to-end test that includes the iOS app is
 `ios/SIOPApp/UITests/EndToEndRPTests.swift` (it needs this server running).
 
+## Hosting it
+
+The server takes its port from `$PORT`, and the page derives `client_id` and `redirect_uri` from
+the URL it was loaded from, so it runs anywhere that terminates TLS and assigns a port, with
+nothing to configure. The `Dockerfile` builds it.
+
+```
+gcloud run deploy siop-rp --source rp --allow-unauthenticated
+```
+
+A hosted RP is the practical way to exercise a phone or tablet, since the certificate is then one
+the device already trusts.
+
 ## Known limitations
 
 - **Open this in your default browser.** The OP returns the response by opening `redirect_uri`,
@@ -87,7 +105,6 @@ The end-to-end test that includes the iOS app is
   that started the request. Starting in a different browser means the response never arrives, and
   the localStorage holding the nonce and state is not reachable either, so the check fails. It
   fails closed: it never succeeds incorrectly.
-- To use it from a physical device, run `python3 serve.py --tls` and open the Mac's LAN address
-  over https (`client_id` and `redirect_uri` follow whatever URL the page is served from). Over
-  plain http the page loads but cannot verify anything, because WebCrypto is unavailable outside
-  a secure context.
+- Verification needs a secure context, so over plain http on a LAN address the page loads but
+  cannot verify. On a desktop browser `--tls` covers it; on iOS it does not, and the RP has to be
+  hosted or its certificate trusted on the device.
