@@ -1,4 +1,4 @@
-// Decides whether a Codex or Claude Code review approved the change, and renders it.
+// Decides whether a Codex review approved the change, and renders it.
 //
 // Reads the companion's --json payload on stdin. The verdict comes from the
 // structured result and nothing else: the rendered report embeds the summary
@@ -21,19 +21,14 @@ try {
     fail(`the review produced no JSON payload (${cause.message})`);
 }
 
-if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+if (!payload || typeof payload !== "object") {
     fail("the review payload is not an object");
 }
 if (payload.parseError) {
     fail(`the review output could not be parsed: ${payload.parseError}`);
 }
-// Both installed companions currently use the historical `codex` envelope.
-// Accept `claude` as well, but never accept approval without a successful run.
-const runners = [payload.codex, payload.claude].filter(Boolean);
-// Codex reports a numeric exit status; Claude reports a completion state.
-if (runners.length === 0 || runners.some((runner) =>
-    runner.status !== 0 && runner.status !== "completed")) {
-    fail("the review has no successful runner status, or a runner failed");
+if (!payload.codex || payload.codex.status !== 0) {
+    fail("the Codex review has no successful runner status");
 }
 
 const result = payload.result;
@@ -45,9 +40,7 @@ if (result.summary) {
     console.log(result.summary);
 }
 for (const finding of result.findings ?? []) {
-    const location = finding.location ?? (finding.file
-        ? `${finding.file}:${finding.line_start ?? "?"}` : "");
-    const where = location ? ` (${location})` : "";
+    const where = finding.location ? ` (${finding.location})` : "";
     console.log(`\n- [${finding.severity ?? "?"}] ${finding.title ?? "finding"}${where}`);
     if (finding.body) console.log(`  ${finding.body}`);
 }

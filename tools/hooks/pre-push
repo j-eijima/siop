@@ -1,6 +1,6 @@
 #!/bin/sh
-# Cross-checks a Claude-originated push with Codex, and a Codex-originated push
-# with Claude Code. Both use structured adversarial review verdicts.
+# Reviews Claude-originated pushes with Codex. Codex-originated pushes skip
+# review. Unknown origins require an explicit PUSH_AGENT.
 #
 # The reviewer compares a base against the checked-out HEAD. That shape can
 # only speak for a fast-forward of the current branch, so every other kind of
@@ -39,21 +39,7 @@ find_codex_companion() {
         sort -V | tail -1
 }
 
-find_claude_companion() {
-    if [ -n "${CLAUDE_COMPANION:-}" ]; then
-        printf '%s' "$CLAUDE_COMPANION"
-        return
-    fi
-    configured=$(git config --get claude.companion || true)
-    if [ -n "$configured" ]; then
-        printf '%s' "$configured"
-        return
-    fi
-    ls -d "${CODEX_HOME:-$HOME/.codex}"/plugins/cache/sendbird/cc/*/scripts/claude-companion.mjs 2>/dev/null |
-        sort -V | tail -1
-}
-
-select_reviewer() {
+select_origin() {
     # An explicit origin resolves nested sessions and ordinary terminals.
     # These markers route reviews; they are not proof of who wrote a commit.
     agent=${PUSH_AGENT:-}
@@ -70,29 +56,24 @@ select_reviewer() {
         fi
     fi
     case "$agent" in
-        claude)
-            REVIEWER=Codex
-            COMPANION=$(find_codex_companion)
-            config_key=codex.companion
-            ;;
-        codex)
-            REVIEWER="Claude Code"
-            COMPANION=$(find_claude_companion)
-            config_key=claude.companion
-            ;;
+        claude|codex) ;;
         *) refuse "invalid PUSH_AGENT '$agent'; use claude or codex" ;;
     esac
-    [ -n "$COMPANION" ] && [ -f "$COMPANION" ] || refuse "no $REVIEWER companion found.
-pre-push:   Install its plugin, or set git config $config_key <path to companion.mjs>"
-    echo "pre-push: push origin=$agent; reviewer=$REVIEWER"
 }
 
+agent=""
 COMPANION=""
 
 # git feeds one line per ref being pushed: <local ref> <local sha> <remote ref> <remote sha>
 while read -r _local_ref local_sha _remote_ref remote_sha; do
     # Deleting a branch pushes no content to review.
     [ "$local_sha" = "$EMPTY_SHA" ] && continue
+    [ "$local_sha" = "$remote_sha" ] && continue
+    [ -n "$agent" ] || select_origin
+    if [ "$agent" = codex ]; then
+        echo "pre-push: push origin=codex; review skipped by policy"
+        continue
+    fi
 
     if [ "$local_sha" != "$(git rev-parse HEAD)" ]; then
         refuse "$local_sha is not the checked-out HEAD, so the review cannot cover it"
@@ -126,15 +107,16 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         continue
     fi
 
+    if [ -z "$COMPANION" ]; then
+        COMPANION=$(find_codex_companion)
+        [ -n "$COMPANION" ] && [ -f "$COMPANION" ] || refuse "no Codex companion found.
+pre-push:   Install the codex plugin, or set git config codex.companion <path to codex-companion.mjs>"
+    fi
     count=$(git rev-list --count "$base..$local_sha")
-    # No reviewer is needed for deletions or refs with nothing new to review.
-    [ -n "$COMPANION" ] || select_reviewer
-    echo "pre-push: $REVIEWER reviewing $count commit(s) against $(git rev-parse --short "$base")..."
+    echo "pre-push: push origin=claude; Codex reviewing $count commit(s) against $(git rev-parse --short "$base")..."
 
-    # Claude suppresses progress under --json. The wrapper provides a heartbeat
-    # and timeout on stderr while keeping the structured payload on stdout.
-    payload=$(node "$(dirname "$0")/run-review.mjs" "$COMPANION" \
-        adversarial-review --wait --json --base "$base" </dev/null) ||
+    # Keep reviewer stdin separate from the hook's remaining ref updates.
+    payload=$(node "$COMPANION" adversarial-review --wait --json --base "$base" </dev/null) ||
         refuse "the review did not complete"
 
     # Compared against the sha being pushed, not against a HEAD read later:
@@ -151,4 +133,4 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         refuse "the review did not approve these changes"
 done
 
-echo "pre-push: approved."
+echo "pre-push: allowed."

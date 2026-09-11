@@ -106,58 +106,43 @@ cd rp && node --test
 tools/install-hooks.sh
 ```
 
-push しようとしているコミットを、もう一方のコーディングエージェントで cross-check する
-pre-push フックを入れる。
+以下の方針で動作する pre-push フックを入れる。
 
-| push 元 | レビュア |
+| push 元 | レビュー |
 |---|---|
-| Claude Code | Codex |
-| Codex | Claude Code |
-
-どちらも構造化された判定を返す adversarial review を実行する。正常に完了したレビューの
-`approve` だけが push を通す。実行失敗・解析できない結果・レビュアの未導入では拒否し、
-push 元と同じエージェントには切り替えない。Claude companion の通常の `review` は構造化された
-判定ではなく文章を返すため、このゲートでは両側とも `adversarial-review` を使う。
-Codex の数値の成功ステータス(`0`)と Claude の完了状態(`"completed"`)に対応し、不明・失敗の状態は
-拒否する。待機中は30秒ごとに進捗を表示し、600秒でレビュアを中止する。
-上限は `PRE_PUSH_REVIEW_TIMEOUT_SECONDS` (1–86400) で変更できる。中止した場合は push を拒否する。
+| Claude Code | Codex の adversarial review。承認が必要 |
+| Codex | レビューなし (通常・adversarial ともに実行しない) |
 
 Codex は `CODEX_THREAD_ID` または `CODEX_SESSION_ID`、Claude Code は
 [`CLAUDECODE=1`](https://code.claude.com/docs/en/env-vars) で検出する。明示的な `PUSH_AGENT` を
 優先する。通常のターミナルから実行する場合や、エージェントの入れ子で両方の情報が残る場合は、
-push 元を指定する。
+適用する方針を指定する。
 
 ```sh
-PUSH_AGENT=codex git push   # Claude Code がレビュー
+PUSH_AGENT=codex git push   # レビューなし
 PUSH_AGENT=claude git push # Codex がレビュー
 ```
 
-push 元が不明・曖昧な場合は拒否する。これは実行環境からレビュアを選ぶ仕組みであり、
-コミットの作成者を証明するものではない。
+push 元が不明・曖昧な場合は拒否する。この情報は方針の選択に使い、コミットの作成者を証明する
+ものではない。Codex からの push はスキップをログに表示し、companion プラグインも不要。
+ブランチ削除と変更のない ref はレビュー・push 元の検出ともに不要。
 
-ローカルのレビュア CLI を各自の認証情報で動かすため CI では動かせず、フックを入れたマシン
-だけが対象になる。フックは clone に含まれないので clone ごとに一度インストーラを実行する。
-個別に意図して無視する場合は `git push --no-verify`。
+Claude Code からの push は、正常に完了した Codex レビューの構造化された `approve` だけを
+通す。実行失敗・解析できない結果・レビュアの未導入では拒否する。レビュアはベースと
+チェックアウト中の HEAD を比較するので、このレビュー経路では HEAD の fast-forward と、
+送信先が広告するベースのある新規ブランチだけが対象になる。`tools/test-pre-push.sh` が
+振り分け・スキップ・レビューの拒否条件を、レビュアをスタブ化した使い捨てリポジトリで検査する。
 
-レビュアはベースとチェックアウト中の HEAD を比較するため、現在のブランチの fast-forward しか
-判断できない。それ以外 — force push、チェックアウトしていない ref、リモートにレビュー済みの
-起点が無い新規ブランチ — は、カバーできていないレビューで承認せずに拒否する。この判断は
-`tools/test-pre-push.sh` がレビュアをスタブ化した使い捨てリポジトリで検査する。ゲートの壊れ方は
-「レビューされないものを通してしまう」ことなので。
+ローカルの Codex CLI を各自の認証情報で動かすためレビューは CI では動かせず、フックを
+入れたマシンだけが対象になる。フックは clone に含まれないので clone ごとに一度インストーラを
+実行する。個別に意図して無視する場合は `git push --no-verify`。
 
 このゲートにプロジェクト固有の部分は無い。他で使うときは `tools/hooks/`、
-`tools/install-hooks.sh`、`tools/test-pre-push.sh` をコピーすればよく、必要なのは git・node・sh
-だけ。レビュアの CLI と companion プラグインの導入・認証も必要。companion の場所は以下の
-優先順位で決める。
-
-| レビュア | 環境変数で指定 | Git config | 既定のプラグインキャッシュ |
-|---|---|---|---|
-| Codex | `CODEX_COMPANION` | `codex.companion` | `~/.claude/plugins/cache/openai-codex/codex/*/scripts/codex-companion.mjs` |
-| Claude Code | `CLAUDE_COMPANION` | `claude.companion` | `$CODEX_HOME/plugins/cache/sendbird/cc/*/scripts/claude-companion.mjs` |
-
-Claude companion の探索で `CODEX_HOME` が未設定の場合は `~/.codex` を使う。既定の探索は
-導入済みの最新版を選ぶので、プラグイン更新後に古いバージョンを参照し続けない。
-配置が異なる場合は環境変数か Git config で指定する。
+`tools/install-hooks.sh`、`tools/test-pre-push.sh` をコピーすればよく、スクリプトには git・node・sh
+が必要。Claude Code からのレビュー経路には、認証済みの Codex CLI と companion プラグインも
+必要。companion は `CODEX_COMPANION`、Git config の `codex.companion` の順に優先し、
+指定がなければ `~/.claude/plugins/cache/openai-codex/codex/*/scripts/codex-companion.mjs` の
+導入済み最新版を使う。
 
 ## ドキュメント
 

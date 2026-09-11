@@ -11,26 +11,18 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 STUB="$WORK/stub-companion.mjs"
-CLAUDE_STUB="$WORK/claude-companion.mjs"
 VERDICT_FILE="$WORK/verdict"
 cat > "$STUB" <<'STUBEOF'
 import { execSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
-const reviewer = process.argv[1].endsWith("/claude-companion.mjs") ? "claude" : "codex";
-// A CLI may consume stdin. It must not swallow the hook's remaining refs.
-readFileSync(0, "utf8");
-appendFileSync(process.env.REVIEW_LOG, reviewer + " " + process.argv.slice(2).join(" ") + "\n");
+appendFileSync(process.env.REVIEW_LOG, process.argv.slice(2).join(" ") + "\n");
 // Lets a test move HEAD while the review is running.
 if (process.env.MUTATE_DURING_REVIEW) {
     execSync(process.env.MUTATE_DURING_REVIEW, { stdio: "ignore" });
 }
 const verdict = readFileSync(process.env.VERDICT_FILE, "utf8").trim();
 console.log(JSON.stringify({
-    // Claude's installed companion also uses the historical `codex` field.
-    codex: { status: reviewer === "claude"
-        ? (process.env.STUB_STATUS === "1" ? "failed" : "completed")
-        : Number(process.env.STUB_STATUS ?? 0) },
-    parseError: process.env.STUB_PARSE_ERROR || null,
+    codex: { status: 0 },
     result: {
         verdict,
         // A summary is rendered verbatim, so it can contain anything.
@@ -39,7 +31,6 @@ console.log(JSON.stringify({
     },
 }));
 STUBEOF
-cp "$STUB" "$CLAUDE_STUB"
 
 failures=0
 check() {
@@ -56,18 +47,15 @@ run_hook() {
     (
         cd "$WORK/repo"
         echo "$1" | env \
-            CODEX_COMPANION="${COMPANION_OVERRIDE-$STUB}" \
-            CLAUDE_COMPANION="${CLAUDE_COMPANION_OVERRIDE-$CLAUDE_STUB}" \
             PUSH_AGENT="${AGENT_OVERRIDE-claude}" \
             CODEX_THREAD_ID="${TEST_CODEX_THREAD_ID:-}" \
             CODEX_SESSION_ID="${TEST_CODEX_SESSION_ID:-}" \
             CLAUDECODE="${TEST_CLAUDECODE:-}" \
+            CODEX_COMPANION="${COMPANION_OVERRIDE-$STUB}" \
             REVIEW_LOG="$WORK/reviews" \
             VERDICT_FILE="$VERDICT_FILE" \
             MUTATE_DURING_REVIEW="${MUTATE_DURING_REVIEW:-}" \
             STUB_SUMMARY="${STUB_SUMMARY:-}" \
-            STUB_STATUS="${STUB_STATUS:-0}" \
-            STUB_PARSE_ERROR="${STUB_PARSE_ERROR:-}" \
             "$HOOK" "${2:-origin}" "${3:-$WORK/remote.git}" > "$WORK/out" 2>&1
     )
 }
@@ -101,13 +89,15 @@ echo "pre-push hook:"
 run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" && rc=0 || rc=$?
 check "fast-forward is reviewed and allowed" "0" "$rc"
 check "  ...and the review actually ran" "1" "$(reviews)"
-expected_args="adversarial-review --wait --json --base $SECOND"
-check "Claude push runs Codex against the advertised base" "codex $expected_args" "$(cat "$WORK/reviews")"
 
+# Codex pushes need neither reviewer, including no installed companion.
 : > "$WORK/reviews"
-( AGENT_OVERRIDE=codex run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
-check "Codex push runs Claude Code" "0" "$rc"
-check "  ...with the structured review and exact base" "claude $expected_args" "$(cat "$WORK/reviews")"
+( AGENT_OVERRIDE=codex COMPANION_OVERRIDE="$WORK/missing.mjs" \
+    run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
+check "Codex push skips review without an installed companion" "0" "$rc"
+check "  ...no reviewer was launched" "0" "$(reviews)"
+grep -q 'review skipped by policy' "$WORK/out" && found=yes || found=no
+check "  ...skip is explicit in the log" "yes" "$found"
 
 for marker in thread session claude; do
     : > "$WORK/reviews"
@@ -119,52 +109,36 @@ for marker in thread session claude; do
         claude) ( AGENT_OVERRIDE="" TEST_CLAUDECODE=1 \
             run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$? ;;
     esac
-    check "$marker session is detected" "0" "$rc"
-    expected_reviewer=claude
-    [ "$marker" != claude ] || expected_reviewer=codex
-    check "  ...selects the opposite reviewer" "$expected_reviewer $expected_args" "$(cat "$WORK/reviews")"
+    check "$marker origin detected" "0" "$rc"
+    expected_reviews=0
+    [ "$marker" != claude ] || expected_reviews=1
+    check "  ...only Claude origin launches a review" "$expected_reviews" "$(reviews)"
 done
-
 : > "$WORK/reviews"
 ( AGENT_OVERRIDE="" run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
-check "unknown origin requires an explicit agent" "1" "$rc"
+check "unknown origin is refused" "1" "$rc"
 ( AGENT_OVERRIDE="" TEST_CLAUDECODE=1 TEST_CODEX_THREAD_ID=test \
     run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
-check "ambiguous nested session requires an explicit agent" "1" "$rc"
+check "ambiguous origin is refused" "1" "$rc"
 ( AGENT_OVERRIDE=typo run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
-check "invalid explicit agent is refused" "1" "$rc"
-check "  ...none of these starts a reviewer" "0" "$(reviews)"
+check "invalid explicit origin is refused" "1" "$rc"
+check "  ...no reviewer was launched" "0" "$(reviews)"
 ( AGENT_OVERRIDE=codex TEST_CLAUDECODE=1 TEST_CODEX_THREAD_ID=test \
     run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
-check "explicit origin resolves a nested session" "0" "$rc"
-check "  ...uses Claude for the explicit Codex origin" "claude $expected_args" "$(cat "$WORK/reviews")"
+check "explicit Codex origin resolves nesting and skips review" "0" "$rc"
+check "  ...no reviewer was launched" "0" "$(reviews)"
 
-: > "$WORK/reviews"
-( AGENT_OVERRIDE=codex CLAUDE_COMPANION_OVERRIDE="$WORK/missing.mjs" \
-    run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
-check "missing Claude companion blocks a Codex push" "1" "$rc"
-check "  ...does not fall back to Codex" "0" "$(reviews)"
-
-git config claude.companion "$CLAUDE_STUB"
-( AGENT_OVERRIDE=codex CLAUDE_COMPANION_OVERRIDE="" \
-    run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
-check "Claude companion can be selected via git config" "0" "$rc"
-git config claude.companion "$WORK/missing.mjs"
-( AGENT_OVERRIDE=codex run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
-check "explicit Claude companion takes precedence over git config" "0" "$rc"
-git config --unset claude.companion
-
-: > "$WORK/reviews"
-( AGENT_OVERRIDE=codex run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND
-refs/heads/topic $HEAD_SHA refs/heads/topic $FIRST" ) && rc=0 || rc=$?
-check "multiple updated refs are all reviewed" "0" "$rc"
-check "  ...reviewer stdin cannot consume the second ref" "2" "$(reviews)"
+# Deletions and no-op ref updates require neither origin nor reviewer.
+( AGENT_OVERRIDE="" COMPANION_OVERRIDE="$WORK/missing.mjs" \
+    run_hook "refs/heads/main $ZERO refs/heads/main $HEAD_SHA" ) && rc=0 || rc=$?
+check "deletion needs no origin or companion" "0" "$rc"
+( AGENT_OVERRIDE="" COMPANION_OVERRIDE="$WORK/missing.mjs" \
+    run_hook "refs/heads/main $HEAD_SHA refs/heads/main $HEAD_SHA" ) && rc=0 || rc=$?
+check "unchanged ref needs no origin or companion" "0" "$rc"
 
 echo "needs-attention" > "$VERDICT_FILE"
 run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" && rc=0 || rc=$?
 check "a verdict other than approve blocks" "1" "$rc"
-( AGENT_OVERRIDE=codex run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
-check "Claude needs-attention also blocks" "1" "$rc"
 
 # The report embeds the summary verbatim, so a rejection whose summary reads
 # like an approval must not be mistaken for one.
@@ -172,14 +146,6 @@ check "Claude needs-attention also blocks" "1" "$rc"
     run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
 check "a summary that quotes an approval does not approve" "1" "$rc"
 echo "approve" > "$VERDICT_FILE"
-for agent in claude codex; do
-    ( AGENT_OVERRIDE=$agent STUB_STATUS=1 \
-        run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
-    check "$agent push rejects approve with a failed runner" "1" "$rc"
-    ( AGENT_OVERRIDE=$agent STUB_PARSE_ERROR="bad output" \
-        run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
-    check "$agent push rejects unparseable review output" "1" "$rc"
-done
 
 : > "$WORK/reviews"
 run_hook "refs/heads/main $SECOND refs/heads/main $HEAD_SHA" && rc=0 || rc=$?
@@ -196,12 +162,6 @@ check "  ...rather than silently approved" "0" "$(reviews)"
 
 run_hook "refs/heads/main $ZERO refs/heads/main $HEAD_SHA" && rc=0 || rc=$?
 check "deleting a branch needs no review" "0" "$rc"
-( AGENT_OVERRIDE="" COMPANION_OVERRIDE="$WORK/missing.mjs" \
-    run_hook "refs/heads/main $ZERO refs/heads/main $HEAD_SHA" ) && rc=0 || rc=$?
-check "deletion does not require an origin or companion" "0" "$rc"
-( AGENT_OVERRIDE="" COMPANION_OVERRIDE="$WORK/missing.mjs" \
-    run_hook "refs/heads/main $HEAD_SHA refs/heads/main $HEAD_SHA" ) && rc=0 || rc=$?
-check "an unchanged ref does not require an origin or companion" "0" "$rc"
 
 # With a baseline on the destination, a new ref can be reviewed against it.
 git push -q origin main
@@ -245,64 +205,6 @@ check "  ...1.0.10 rather than 1.0.6" "yes" "$found"
 ( COMPANION_OVERRIDE="" HOME="$WORK/empty-home" \
     run_hook "refs/heads/main $HEAD_SHA refs/heads/main $SECOND" ) && rc=0 || rc=$?
 check "no companion installed is refused, not ignored" "1" "$rc"
-
-# Check the result adapter independently of either CLI's availability.
-node --input-type=module - "$(dirname "$HOOK")/review-verdict.mjs" <<'JSEOF' || failures=$((failures + 1))
-import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-const result = { verdict: "approve", summary: "Reviewed", findings: [] };
-const cases = [
-    ["Codex numeric status", { codex: { status: 0 }, result }, 0],
-    ["Claude completion state in historical envelope", { codex: { status: "completed" }, result }, 0],
-    ["Claude-named runner envelope", { claude: { status: "completed" }, result }, 0],
-    ["missing runner status", { result }, 1],
-    ["failed Claude runner", { codex: { status: "failed" }, result }, 1],
-    ["unknown Claude runner state", { codex: { status: "unknown" }, result }, 1],
-    ["unrecognised runner state", { codex: { status: "success" }, result }, 1],
-    ["completed Claude review rejects", { codex: { status: "completed" }, result: { verdict: "needs-attention" } }, 1],
-    ["conflicting runner status", { codex: { status: 0 }, claude: { status: 1 }, result }, 1],
-    ["missing verdict", { codex: { status: 0 }, result: {} }, 1],
-    ["JSON null", null, 1],
-];
-for (const [name, payload, status] of cases) {
-    const run = spawnSync(process.execPath, [process.argv[2]], {
-        input: JSON.stringify(payload), encoding: "utf8",
-    });
-    assert.equal(run.status, status, `${name}: ${run.stderr}`);
-    console.log(`  ok   ${name}`);
-}
-assert.equal(spawnSync(process.execPath, [process.argv[2]], {
-    input: "Verdict: approve", encoding: "utf8",
-}).status, 1, "unstructured text must not approve");
-console.log("  ok   unstructured text cannot approve");
-JSEOF
-
-# The timeout must refuse even if a hung reviewer printed approval first.
-cat > "$WORK/hung-review.mjs" <<'JSEOF'
-console.log(JSON.stringify({codex:{status:"completed"},result:{verdict:"approve"}}));
-process.on("SIGTERM", () => {});
-setInterval(() => {}, 1000);
-JSEOF
-node --input-type=module - "$(dirname "$HOOK")/run-review.mjs" "$WORK/hung-review.mjs" <<'JSEOF' || failures=$((failures + 1))
-import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-const [runner, hung] = process.argv.slice(2);
-const run = spawnSync(process.execPath, [runner, hung], {
-    env: { ...process.env, PRE_PUSH_REVIEW_TIMEOUT_SECONDS: "1" },
-    encoding: "utf8", timeout: 10000,
-});
-assert.equal(run.status, 1, run.stderr);
-assert.match(run.stdout, /approve/);
-assert.match(run.stderr, /timed out/);
-console.log("  ok   timeout rejects early approval and kills a hung reviewer");
-const invalid = spawnSync(process.execPath, [runner, hung], {
-    env: { ...process.env, PRE_PUSH_REVIEW_TIMEOUT_SECONDS: "invalid" },
-    encoding: "utf8", timeout: 10000,
-});
-assert.equal(invalid.status, 1);
-assert.equal(invalid.stdout, "");
-console.log("  ok   invalid timeout cannot launch a reviewer");
-JSEOF
 
 echo
 [ "$failures" -eq 0 ] && echo "all checks passed" || echo "$failures check(s) failed"
