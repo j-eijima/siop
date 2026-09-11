@@ -114,11 +114,34 @@ in `rp/`.
 tools/install-hooks.sh
 ```
 
-Installs a pre-push hook that runs an adversarial Codex review over exactly the commits being
-pushed and refuses the push unless it comes back approved. It drives the local Codex CLI under
-your own credentials, so it cannot run in CI, and it only guards pushes from a machine where it
-is installed. Hooks are not cloned, so run this once per clone. Override a single push with
-`git push --no-verify`.
+Installs a pre-push hook that cross-checks the commits being pushed with the other coding agent:
+
+| Push origin | Reviewer |
+|---|---|
+| Claude Code | Codex |
+| Codex | Claude Code |
+
+Both run an adversarial review that returns a structured verdict. Only `approve` from a
+successful run allows the push; a failure, an unparseable result, or a missing reviewer blocks
+it, without falling back to the pushing agent. The Claude companion's ordinary `review` returns
+prose rather than a structured verdict, so this gate uses `adversarial-review` on both sides.
+
+The hook detects Codex through `CODEX_THREAD_ID` or `CODEX_SESSION_ID`, and Claude Code through
+[`CLAUDECODE=1`](https://code.claude.com/docs/en/env-vars). An explicit `PUSH_AGENT` takes
+precedence. From a plain terminal, or when nested agents leave both sets of markers, specify
+the push origin yourself:
+
+```sh
+PUSH_AGENT=codex git push   # Claude Code reviews
+PUSH_AGENT=claude git push # Codex reviews
+```
+
+Unknown or ambiguous origins are refused. This selects the reviewer from the execution
+environment; it does not establish authorship of the commits.
+
+The hook drives the local reviewer CLI under your own credentials, so it cannot run in CI and
+only guards machines where it is installed. Hooks are not cloned; run the installer once per
+clone. Override a single push deliberately with `git push --no-verify`.
 
 The reviewer compares a base against the checked-out HEAD, which can only speak for a
 fast-forward of the current branch. Anything else — a force push, a ref that is not checked out,
@@ -129,9 +152,17 @@ through unreviewed.
 
 Nothing in the gate is specific to this project. To use it elsewhere, copy `tools/hooks/`,
 `tools/install-hooks.sh` and `tools/test-pre-push.sh`; they need only git, node and sh. The
-companion is located by taking `codex.companion` from git config when set, and otherwise the
-newest version installed — a pinned path would turn the next plugin update into a gate that
-refuses every push.
+reviewer CLI and its companion plugin must also be installed and authenticated. Companion
+lookup uses the following precedence:
+
+| Reviewer | Environment override | Git config | Default plugin cache |
+|---|---|---|---|
+| Codex | `CODEX_COMPANION` | `codex.companion` | `~/.claude/plugins/cache/openai-codex/codex/*/scripts/codex-companion.mjs` |
+| Claude Code | `CLAUDE_COMPANION` | `claude.companion` | `$CODEX_HOME/plugins/cache/sendbird/cc/*/scripts/claude-companion.mjs` |
+
+For the Claude companion, `CODEX_HOME` defaults to `~/.codex`. Default lookup chooses the newest
+installed version, so a plugin update does not leave the hook pointing at an obsolete version.
+Use an override for a different installation layout.
 
 ## Documentation
 

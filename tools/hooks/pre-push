@@ -1,12 +1,12 @@
 #!/bin/sh
-# Runs an adversarial Codex review over exactly what is about to be pushed, and
-# refuses the push unless it comes back approved.
+# Cross-checks a Claude-originated push with Codex, and a Codex-originated push
+# with Claude Code. Both use structured adversarial review verdicts.
 #
 # The reviewer compares a base against the checked-out HEAD. That shape can
 # only speak for a fast-forward of the current branch, so every other kind of
 # push is refused rather than waved through on a review that did not cover it.
 #
-# This cannot live in GitHub Actions: it drives the local Codex CLI under your
+# This cannot live in GitHub Actions: it drives the local reviewer CLI under your
 # own credentials. It therefore only guards pushes from a machine where it is
 # installed — see tools/install-hooks.sh.
 #
@@ -25,7 +25,7 @@ refuse() {
 # The plugin installs under a versioned directory, so pinning a version here
 # would turn the next plugin update into a gate that refuses every push. Take
 # an explicit setting when there is one, otherwise the newest installed.
-find_companion() {
+find_codex_companion() {
     if [ -n "${CODEX_COMPANION:-}" ]; then
         printf '%s' "$CODEX_COMPANION"
         return
@@ -39,10 +39,55 @@ find_companion() {
         sort -V | tail -1
 }
 
-COMPANION=$(find_companion)
-[ -n "$COMPANION" ] && [ -f "$COMPANION" ] || refuse "no Codex companion found.
-pre-push:   Install the codex plugin, or point at it with:
-pre-push:     git config codex.companion <path to codex-companion.mjs>"
+find_claude_companion() {
+    if [ -n "${CLAUDE_COMPANION:-}" ]; then
+        printf '%s' "$CLAUDE_COMPANION"
+        return
+    fi
+    configured=$(git config --get claude.companion || true)
+    if [ -n "$configured" ]; then
+        printf '%s' "$configured"
+        return
+    fi
+    ls -d "${CODEX_HOME:-$HOME/.codex}"/plugins/cache/sendbird/cc/*/scripts/claude-companion.mjs 2>/dev/null |
+        sort -V | tail -1
+}
+
+select_reviewer() {
+    # An explicit origin resolves nested sessions and ordinary terminals.
+    # These markers route reviews; they are not proof of who wrote a commit.
+    agent=${PUSH_AGENT:-}
+    if [ -z "$agent" ]; then
+        codex_session=${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-}}
+        if [ "${CLAUDECODE:-}" = 1 ] && [ -n "$codex_session" ]; then
+            refuse "both Claude and Codex session markers are present; set PUSH_AGENT=claude or PUSH_AGENT=codex"
+        elif [ "${CLAUDECODE:-}" = 1 ]; then
+            agent=claude
+        elif [ -n "$codex_session" ]; then
+            agent=codex
+        else
+            refuse "cannot identify the push origin; set PUSH_AGENT=claude or PUSH_AGENT=codex"
+        fi
+    fi
+    case "$agent" in
+        claude)
+            REVIEWER=Codex
+            COMPANION=$(find_codex_companion)
+            config_key=codex.companion
+            ;;
+        codex)
+            REVIEWER="Claude Code"
+            COMPANION=$(find_claude_companion)
+            config_key=claude.companion
+            ;;
+        *) refuse "invalid PUSH_AGENT '$agent'; use claude or codex" ;;
+    esac
+    [ -n "$COMPANION" ] && [ -f "$COMPANION" ] || refuse "no $REVIEWER companion found.
+pre-push:   Install its plugin, or set git config $config_key <path to companion.mjs>"
+    echo "pre-push: push origin=$agent; reviewer=$REVIEWER"
+}
+
+COMPANION=""
 
 # git feeds one line per ref being pushed: <local ref> <local sha> <remote ref> <remote sha>
 while read -r _local_ref local_sha _remote_ref remote_sha; do
@@ -82,11 +127,13 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     fi
 
     count=$(git rev-list --count "$base..$local_sha")
-    echo "pre-push: reviewing $count commit(s) against $(git rev-parse --short "$base")..."
+    # No reviewer is needed for deletions or refs with nothing new to review.
+    [ -n "$COMPANION" ] || select_reviewer
+    echo "pre-push: $REVIEWER reviewing $count commit(s) against $(git rev-parse --short "$base")..."
 
     # --json so the verdict is read from the structured result. Progress goes
     # to the terminal on stderr; only the payload is captured.
-    payload=$(node "$COMPANION" adversarial-review --wait --json --base "$base") ||
+    payload=$(node "$COMPANION" adversarial-review --wait --json --base "$base" </dev/null) ||
         refuse "the review did not complete"
 
     # Compared against the sha being pushed, not against a HEAD read later:
