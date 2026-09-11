@@ -20,6 +20,29 @@ one shared Relying Party.
 - An SDK for using SIOP, with documentation
 - A sample app that actually works
 
+## Planned UI requirements
+
+The highest priority for both the SIOP app and RP is making protocol parameters easy to
+understand: show their actual values, where they come from, and how request fields, response
+fields, and validation expectations relate. These are UI requirements, not completed features.
+
+The SIOP app must support creating, listing and inspecting, updating, and deleting identities
+(`sub` and the associated keys), and let the user choose which identity to use for each response.
+Show the selected `sub`, its public key (`sub_jwk`), and the response destination before signing.
+Make each identity's RP association visible; the current implementation automatically uses a
+separate key per RP, so explicit identity management and selection require extending that behavior.
+
+An identity's `sub` is derived from its public key, not a freely editable string. The proposed
+editing UI changes local labels and notes; replacing the key creates a different `sub`. Deletion
+must explain that removing the signing key prevents future responses with that identity unless
+the key can be restored, and does not delete an account held by the RP.
+
+An interactive [HTML UI mock](rp/public/mock.html) demonstrates identity management, identity
+selection, the response preview, and the RP's side-by-side parameter checks. Open the file in a
+browser, or visit `/mock.html` on the test RP. It uses temporary in-memory keys and real WebCrypto
+operations, without contacting an external RP. Reloading clears the identities. This is a UI
+demonstration, not an implementation of these features in the native apps or an interoperability test.
+
 ## Status
 
 Implementations are taken in the order below. Each OS uses its default language first;
