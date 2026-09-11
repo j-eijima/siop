@@ -125,6 +125,10 @@ Both run an adversarial review that returns a structured verdict. Only `approve`
 successful run allows the push; a failure, an unparseable result, or a missing reviewer blocks
 it, without falling back to the pushing agent. The Claude companion's ordinary `review` returns
 prose rather than a structured verdict, so this gate uses `adversarial-review` on both sides.
+Codex's numeric success status (`0`) and Claude's completion state (`"completed"`) are both
+accepted; unknown or failed states are refused. While waiting, the hook prints a heartbeat
+every 30 seconds and cancels the reviewer after 600 seconds. Set
+`PRE_PUSH_REVIEW_TIMEOUT_SECONDS` (1–86400) to change this limit. Cancellation refuses the push.
 
 The hook detects Codex through `CODEX_THREAD_ID` or `CODEX_SESSION_ID`, and Claude Code through
 [`CLAUDECODE=1`](https://code.claude.com/docs/en/env-vars). An explicit `PUSH_AGENT` takes

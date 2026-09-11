@@ -27,7 +27,9 @@ if (process.env.MUTATE_DURING_REVIEW) {
 const verdict = readFileSync(process.env.VERDICT_FILE, "utf8").trim();
 console.log(JSON.stringify({
     // Claude's installed companion also uses the historical `codex` field.
-    codex: { status: Number(process.env.STUB_STATUS ?? 0) },
+    codex: { status: reviewer === "claude"
+        ? (process.env.STUB_STATUS === "1" ? "failed" : "completed")
+        : Number(process.env.STUB_STATUS ?? 0) },
     parseError: process.env.STUB_PARSE_ERROR || null,
     result: {
         verdict,
@@ -250,10 +252,14 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 const result = { verdict: "approve", summary: "Reviewed", findings: [] };
 const cases = [
-    ["legacy runner envelope (both companions)", { codex: { status: 0 }, result }, 0],
-    ["Claude-named runner envelope", { claude: { status: 0 }, result }, 0],
+    ["Codex numeric status", { codex: { status: 0 }, result }, 0],
+    ["Claude completion state in historical envelope", { codex: { status: "completed" }, result }, 0],
+    ["Claude-named runner envelope", { claude: { status: "completed" }, result }, 0],
     ["missing runner status", { result }, 1],
-    ["failed Claude runner", { claude: { status: 1 }, result }, 1],
+    ["failed Claude runner", { codex: { status: "failed" }, result }, 1],
+    ["unknown Claude runner state", { codex: { status: "unknown" }, result }, 1],
+    ["unrecognised runner state", { codex: { status: "success" }, result }, 1],
+    ["completed Claude review rejects", { codex: { status: "completed" }, result: { verdict: "needs-attention" } }, 1],
     ["conflicting runner status", { codex: { status: 0 }, claude: { status: 1 }, result }, 1],
     ["missing verdict", { codex: { status: 0 }, result: {} }, 1],
     ["JSON null", null, 1],
@@ -269,6 +275,33 @@ assert.equal(spawnSync(process.execPath, [process.argv[2]], {
     input: "Verdict: approve", encoding: "utf8",
 }).status, 1, "unstructured text must not approve");
 console.log("  ok   unstructured text cannot approve");
+JSEOF
+
+# The timeout must refuse even if a hung reviewer printed approval first.
+cat > "$WORK/hung-review.mjs" <<'JSEOF'
+console.log(JSON.stringify({codex:{status:"completed"},result:{verdict:"approve"}}));
+process.on("SIGTERM", () => {});
+setInterval(() => {}, 1000);
+JSEOF
+node --input-type=module - "$(dirname "$HOOK")/run-review.mjs" "$WORK/hung-review.mjs" <<'JSEOF' || failures=$((failures + 1))
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+const [runner, hung] = process.argv.slice(2);
+const run = spawnSync(process.execPath, [runner, hung], {
+    env: { ...process.env, PRE_PUSH_REVIEW_TIMEOUT_SECONDS: "1" },
+    encoding: "utf8", timeout: 10000,
+});
+assert.equal(run.status, 1, run.stderr);
+assert.match(run.stdout, /approve/);
+assert.match(run.stderr, /timed out/);
+console.log("  ok   timeout rejects early approval and kills a hung reviewer");
+const invalid = spawnSync(process.execPath, [runner, hung], {
+    env: { ...process.env, PRE_PUSH_REVIEW_TIMEOUT_SECONDS: "invalid" },
+    encoding: "utf8", timeout: 10000,
+});
+assert.equal(invalid.status, 1);
+assert.equal(invalid.stdout, "");
+console.log("  ok   invalid timeout cannot launch a reviewer");
 JSEOF
 
 echo

@@ -30,7 +30,9 @@ if (payload.parseError) {
 // Both installed companions currently use the historical `codex` envelope.
 // Accept `claude` as well, but never accept approval without a successful run.
 const runners = [payload.codex, payload.claude].filter(Boolean);
-if (runners.length === 0 || runners.some((runner) => runner.status !== 0)) {
+// Codex reports a numeric exit status; Claude reports a completion state.
+if (runners.length === 0 || runners.some((runner) =>
+    runner.status !== 0 && runner.status !== "completed")) {
     fail("the review has no successful runner status, or a runner failed");
 }
 

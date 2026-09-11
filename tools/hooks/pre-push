@@ -131,9 +131,10 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     [ -n "$COMPANION" ] || select_reviewer
     echo "pre-push: $REVIEWER reviewing $count commit(s) against $(git rev-parse --short "$base")..."
 
-    # --json so the verdict is read from the structured result. Progress goes
-    # to the terminal on stderr; only the payload is captured.
-    payload=$(node "$COMPANION" adversarial-review --wait --json --base "$base" </dev/null) ||
+    # Claude suppresses progress under --json. The wrapper provides a heartbeat
+    # and timeout on stderr while keeping the structured payload on stdout.
+    payload=$(node "$(dirname "$0")/run-review.mjs" "$COMPANION" \
+        adversarial-review --wait --json --base "$base" </dev/null) ||
         refuse "the review did not complete"
 
     # Compared against the sha being pushed, not against a HEAD read later:

@@ -118,6 +118,9 @@ pre-push フックを入れる。
 `approve` だけが push を通す。実行失敗・解析できない結果・レビュアの未導入では拒否し、
 push 元と同じエージェントには切り替えない。Claude companion の通常の `review` は構造化された
 判定ではなく文章を返すため、このゲートでは両側とも `adversarial-review` を使う。
+Codex の数値の成功ステータス(`0`)と Claude の完了状態(`"completed"`)に対応し、不明・失敗の状態は
+拒否する。待機中は30秒ごとに進捗を表示し、600秒でレビュアを中止する。
+上限は `PRE_PUSH_REVIEW_TIMEOUT_SECONDS` (1–86400) で変更できる。中止した場合は push を拒否する。
 
 Codex は `CODEX_THREAD_ID` または `CODEX_SESSION_ID`、Claude Code は
 [`CLAUDECODE=1`](https://code.claude.com/docs/en/env-vars) で検出する。明示的な `PUSH_AGENT` を
