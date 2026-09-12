@@ -10,6 +10,20 @@ then open only the records the current task touches.** The records themselves li
 `docs/decisions/`, numbered in the order they were made; this file is their only index, and
 `tools/check-docs.py` fails if a record is missing from it or a row points at nothing.
 
+## Adding and changing records
+
+| Situation | What to do |
+|---|---|
+| A new decision | A new record, numbered next, and a row here in the same change |
+| Not yet pushed through the review gate | A draft. Edit it freely |
+| The **Decision** section needs to change | A new record. The old one gains `Superseded by [00NN](…)` under its title and nothing else; its row here stays, marked superseded |
+| A factual error in Context or Consequences, or a dead link | Correct it in place, and end the record with `Corrected: YYYY-MM-DD — what changed` |
+
+When unsure, ask whether the change touches the Decision section. If it does, it is a new record.
+[0010](docs/decisions/0010-records-appended-facts-corrected.md) says why.
+
+## Index
+
 | # | Decision | Open it when |
 |---|---|---|
 | [0001](docs/decisions/0001-one-language-per-os.md) | Each OS is implemented in its default language, in a fixed order | Adding an implementation, or proposing a cross-platform framework |
@@ -21,3 +35,4 @@ then open only the records the current task touches.** The records themselves li
 | [0007](docs/decisions/0007-push-reviewed-by-the-other-agent.md) | A push is reviewed by the coding agent that did not write it | Touching `tools/hooks/`, the push gate, or CI |
 | [0008](docs/decisions/0008-bilingual-docs-checked-mechanically.md) | Documentation is bilingual, and only its mechanical failures are enforced | Adding documentation, or changing `tools/check-docs.py` |
 | [0009](docs/decisions/0009-specs-and-decisions-split.md) | Behaviour lives in `docs/specs/`, reasoning lives here | Deciding where a new document goes |
+| [0010](docs/decisions/0010-records-appended-facts-corrected.md) | Records are appended; only their facts are corrected | Changing an existing record, or reversing a decision |
