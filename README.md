@@ -20,22 +20,16 @@ one shared Relying Party.
 - An SDK for using SIOP, with documentation
 - A sample app that actually works
 
-## Planned UI requirements
+## What it is supposed to do
 
-The highest priority for both the SIOP app and RP is making protocol parameters easy to
-understand: show their actual values, where they come from, and how request fields, response
-fields, and validation expectations relate. These are UI requirements, not completed features.
+Behaviour the apps promise, and what counts as acceptance, lives in [docs/specs/](docs/specs/)
+rather than here: identity management and selection, what the user must see before anything is
+signed, and making every protocol parameter and its origin legible on both sides. Most of it is
+requirement rather than built behaviour, and each specification says where it stands.
 
-The SIOP app must support creating, listing and inspecting, updating, and deleting identities
-(`sub` and the associated keys), and let the user choose which identity to use for each response.
-Show the selected `sub`, its public key (`sub_jwk`), and the response destination before signing.
-Make each identity's RP association visible; the current implementation automatically uses a
-separate key per RP, so explicit identity management and selection require extending that behavior.
-
-An identity's `sub` is derived from its public key, not a freely editable string. The proposed
-editing UI changes local labels and notes; replacing the key creates a different `sub`. Deletion
-must explain that removing the signing key prevents future responses with that identity unless
-the key can be restored, and does not delete an account held by the RP.
+The reasoning behind decisions already made — pairwise keys, the denied Request Object, the
+browser-only verification — is kept as numbered records in [docs/decisions/](docs/decisions/),
+indexed by a coding-agent skill so that a task loads only the records it touches.
 
 An interactive [HTML UI mock](rp/public/mock.html) demonstrates identity management, identity
 selection, the response preview, and the RP's side-by-side parameter checks. Open the file in a
@@ -168,4 +162,6 @@ are mechanical, so they are checked and enforced in CI: a missing counterpart, a
 one side only, a missing language switcher, a dead relative link.
 
 Configuration for a coding agent is not documentation and is not part of this — a local
-`CLAUDE.md` is ignored, the way `.gitignore` and `project.yml` are not translated either.
+`CLAUDE.md` is ignored and `.claude/` is skipped, the way `.gitignore` and `project.yml` are not
+translated either. The specifications under `docs/specs/` are documentation, and are checked like
+the rest.
