@@ -24,8 +24,8 @@ one shared Relying Party.
 
 Behaviour the apps promise, and what counts as acceptance, lives in [docs/specs/](docs/specs/)
 rather than here: identity management and selection, what the user must see before anything is
-signed, and making every protocol parameter and its origin legible on both sides. Most of it is
-requirement rather than built behaviour, and each specification says where it stands.
+signed, and making every protocol parameter and its origin legible on both sides. The iOS app
+builds the SIOP app's part of it; each specification says where each platform stands.
 
 The reasoning behind decisions already made — pairwise keys, the denied Request Object, the
 browser-only verification — is kept as numbered records in [docs/decisions/](docs/decisions/),
@@ -34,8 +34,9 @@ indexed by a coding-agent skill so that a task loads only the records it touches
 An interactive [HTML UI mock](rp/public/mock.html) demonstrates identity management, identity
 selection, the response preview, and the RP's side-by-side parameter checks. Open the file in a
 browser, or visit `/mock.html` on the test RP. It uses temporary in-memory keys and real WebCrypto
-operations, without contacting an external RP. Reloading clears the identities. This is a UI
-demonstration, not an implementation of these features in the native apps or an interoperability test.
+operations, without contacting an external RP. Reloading clears the identities. The mock itself is
+a demonstration, not an interoperability test. The iOS app implements its SIOP side and the test RP
+its RP side; Android does not yet.
 
 ## Status
 

@@ -36,18 +36,29 @@ the name.
 
 1. Open `http://localhost:8080/`
 2. Edit the parameters as needed — the defaults are the smallest request the spec allows
-3. Press "SIOP アプリで認証する" to open `openid://...`
-4. When the OP returns the response in the fragment of `redirect_uri`, the verification result
-   appears
+3. Press "Choose an identity in SIOP →" to open `openid://...`
+4. When the OP returns the response in the fragment of `redirect_uri`, the result page lays each
+   value this RP sent beside the one that came back, with a verdict for every check
+
+The pages follow the browser's language — English, or Japanese where the browser prefers it. The
+switch in the header, or `?lang=en` / `?lang=ja` in the URL, overrides that and is remembered in
+this browser. Switching redraws the page in place, so a result already checked is not lost.
 
 ### The request is editable
 
 Every parameter can be changed, and more can be added. Values that depart from the spec are
-reported under "仕様との差分" as warnings, but sending is never blocked — seeing how an OP handles
+reported under "Departures from the spec" as warnings, but sending is never blocked — seeing how an OP handles
 a malformed request is the point, so `response_type=code` or a missing nonce can be sent as-is.
 
-Each parameter carries the section number it comes from. The response side lists the received
-fragment parameters and the ID Token claims in the same form.
+Each parameter carries the section number it comes from. The ones the response will be checked
+against — `client_id`, `nonce`, `state` — are marked, and listed again as the values the RP keeps
+for the comparison. The response side lists the received fragment parameters in the same form.
+
+### Watching a check fail
+
+A token cannot be changed once it has arrived, but what the RP expects can. The result page
+re-checks the same token against a different `nonce`, `state` or `aud`, so one check fails while
+every other still shows as passed. The token itself is never touched.
 
 ## What is checked (Section 7.5)
 
@@ -61,6 +72,7 @@ fragment parameters and the ID Token claims in the same form.
 | signature | Verifies against the key in `sub_jwk` |
 | aud | Addressed to this RP's `client_id` |
 | nonce | Matches the value sent in the request |
+| state | The fragment's `state` matches the one sent — checked apart from the token, which does not carry it |
 | exp | Not expired |
 
 A failure does not stop the run: every check is reported so the whole picture is visible.
@@ -79,6 +91,10 @@ Node is all that is needed; there are no dependencies.
 - `test/cross-implementation.test.mjs` — the same checks against a token from the **current**
   Swift build, so a stale fixture cannot hide an interoperability regression. Skipped
   automatically where SIOPKit cannot be built
+- `test/state.test.mjs` — the `state` comparison, which happens outside the token
+- `test/request.test.mjs` — the spec's rules on the request itself. Section 3.2.2.1 allows an
+  http `redirect_uri` only to a native app, and only on the three hosts it names — `localhost`,
+  `127.0.0.1`, `[::1]`. This RP is a web page, so it reports even its own default
 
 Refresh the fixture with `test/fixtures/regenerate.sh` (needs Swift).
 
@@ -105,6 +121,10 @@ the device already trusts.
   that started the request. Starting in a different browser means the response never arrives, and
   the localStorage holding the nonce and state is not reachable either, so the check fails. It
   fails closed: it never succeeds incorrectly.
+- **The default `redirect_uri` is itself outside the spec.** Section 3.2.2.1 forbids http in the
+  Implicit Flow except for a native app on localhost or a loopback address, and this RP is a web
+  page, so `http://localhost:8080/callback.html` is not covered. The request page says so every
+  time. To test within the spec, host the RP on https.
 - Verification needs a secure context, so over plain http on a LAN address the page loads but
   cannot verify. On a desktop browser `--tls` covers it; on iOS it does not, and the RP has to be
   hosted or its certificate trusted on the device.

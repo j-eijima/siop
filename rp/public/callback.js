@@ -1,119 +1,199 @@
 // Receives the Self-Issued OP response from the URL fragment and verifies it
-// (OpenID Connect Core 1.0 Section 7.5). Nothing is sent to the server: in the
+// (OpenID Connect Core 1.0 Section 7.5), laying each value this RP sent
+// beside the one that came back. Nothing is sent to the server: in the
 // Implicit Flow the response lives in the fragment, which browsers do not
 // transmit.
 
+import { onLanguageChange, t } from "./i18n.js";
 import { renderParams } from "./params-table.js";
-import { verifySelfIssuedIDToken } from "./siop-verify.js";
+import { canonicalJWK, checkState, verifySelfIssuedIDToken } from "./siop-verify.js";
 
 const STORAGE_KEY = "siop-rp.pending-request";
 
-const RESPONSE_PARAMS = {
-  id_token: { ref: "7.4", why: "自己発行された ID Token。sub_jwk に含まれる鍵で自己署名されている。" },
-  state: { ref: "3.1.2.1", why: "リクエストで送った state がそのまま返る。照合して CSRF を防ぐ。" },
-  error: { ref: "3.1.2.6", why: "OP がリクエストを拒否したことを示す。" },
-  error_description: { ref: "3.1.2.6", why: "拒否の理由を人間向けに説明する任意の文字列。" },
-};
+const RESPONSE_REFS = { id_token: "7.4", state: "3.1.2.1", error: "3.1.2.6", error_description: "3.1.2.6" };
 
-const CLAIMS = {
-  iss: { ref: "7.4", why: "自己発行の ID Token では常に https://self-issued.me。" },
-  sub: { ref: "7.4", why: "sub_jwk の JWK サムプリント (RFC 7638)。鍵と識別子を結びつける。" },
-  sub_jwk: { ref: "7.4", why: "この ID Token を検証するための公開鍵。OP の鍵はここにしか無い。" },
-  aud: { ref: "3.1.3.7", why: "宛先の RP。SIOP では client_id、つまり redirect URI が入る。" },
-  nonce: { ref: "3.2.2.11", why: "リクエストで送った nonce。応答をそのリクエストに束縛する。" },
-  iat: { ref: "2", why: "発行時刻 (UNIX 秒)。" },
-  exp: { ref: "2", why: "有効期限 (UNIX 秒)。これを過ぎたトークンは受け付けない。" },
-};
+/// The order of the comparison: what binds the response to this request
+/// first, then what the token has to hold on its own.
+const ORDER = ["aud", "nonce", "state", "iss", "alg", "sub_jwk", "sub", "signature", "exp", "structure"];
 
-const summary = document.getElementById("summary");
-const details = document.getElementById("details");
+/// Checks whose verdict is about validity rather than about a match.
+const VALIDITY = new Set(["structure", "sub_jwk", "signature", "exp"]);
 
-function showVerdict(ok, title, message) {
-  summary.innerHTML = "";
-  const heading = document.createElement("p");
-  heading.className = `verdict ${ok ? "ok" : "ng"}`;
-  heading.textContent = title;
-  const body = document.createElement("p");
-  body.className = "note";
-  body.textContent = message;
-  summary.append(heading, body);
-}
-
+const $ = (id) => document.getElementById(id);
 const fragment = new URLSearchParams(location.hash.slice(1));
+
+// Safari can hand a new response to a tab already showing this page. Only the
+// fragment changes, which does not reload it, and the page reads the fragment
+// once — so without this it would go on showing the previous response as if
+// it were the new one.
+window.addEventListener("hashchange", () => location.reload());
+
 const pending = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
 
-// Show what was sent and what came back before judging either.
-renderParams(document.getElementById("request"), pending
-  ? [...new URL(pending.requestURL).searchParams].map(([name, value]) => ({ name, value }))
-  : [{ name: "(なし)", value: "", why: "このブラウザから開始したリクエストの記録がありません。" }]);
+// One-shot: the nonce must not be reusable for a later response. The values
+// stay in this page, so the response can still be re-checked below.
+if (pending && fragment.has("id_token")) localStorage.removeItem(STORAGE_KEY);
 
-const received = [...fragment].map(([name, value]) => ({ name, value, ...(RESPONSE_PARAMS[name] ?? {}) }));
-renderParams(document.getElementById("response"), received.length
-  ? received
-  : [{ name: "(なし)", value: "", why: "フラグメントに応答が含まれていません。" }]);
+/// What this RP expects, as it sent it. Null throughout when this browser has
+/// no record of the request, which fails those comparisons rather than
+/// skipping them.
+const recorded = pending
+  ? { audience: pending.audience, nonce: pending.nonce, state: pending.state ?? "" }
+  : { audience: null, nonce: null, state: null };
 
-console.info("[SIOP RP] 受信した応答", Object.fromEntries(fragment));
+/// Each replaces one expectation, so one check can be watched failing while
+/// the token stays exactly as it came.
+const SCENARIOS = {
+  normal: (expected) => expected,
+  nonce: (expected) => ({ ...expected, nonce: `${expected.nonce}-changed` }),
+  state: (expected) => ({ ...expected, state: `${expected.state}-changed` }),
+  aud: (expected) => ({ ...expected, audience: "https://other.example/cb" }),
+};
 
-if (fragment.has("error")) {
-  // Section 3.1.2.6: the OP reports a refusal as an error response.
-  showVerdict(false, `エラー応答: ${fragment.get("error")}`,
-    fragment.get("error_description") ?? "OP がリクエストを拒否しました。");
-} else if (!fragment.has("id_token")) {
-  showVerdict(false, "応答がありません",
-    "URL のフラグメントに id_token がありません。index.html から認証を開始してください。");
-} else if (!pending) {
-  // Most often this means the response landed in a different browser: iOS
-  // sends an https URL to the *default* browser, and the OP has no way to
-  // return to the specific browser that started the request. nonce and state
-  // live in that browser's storage, so the check fails closed.
-  showVerdict(false, "リクエストの記録がありません",
-    "このブラウザから開始したリクエストが見つかりません。"
-    + "認証を始めたブラウザと、応答が返ってきたブラウザ(iOS の既定ブラウザ)が"
-    + "異なる場合にも起きます。既定のブラウザで index.html を開き直してください。");
-} else if (fragment.get("state") !== pending.state) {
-  showVerdict(false, "state が一致しません",
-    `受信: ${fragment.get("state") || "(なし)"} / 期待値: ${pending.state || "(なし)"}`);
-} else {
-  const result = await verifySelfIssuedIDToken(fragment.get("id_token"), {
-    audience: pending.audience,
-    nonce: pending.nonce,
-  });
-  console.info("[SIOP RP] 検証結果", result);
+const scenario = $("scenario");
+scenario.disabled = !pending || !fragment.has("id_token");
+scenario.addEventListener("change", () => evaluate());
 
-  showVerdict(result.ok,
-    result.ok ? "検証に成功しました" : "検証に失敗しました",
-    result.ok
-      ? `sub = ${result.payload.sub} として認証しました。`
-      : "失敗した検証項目を確認してください。");
+$("copy-token").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  try {
+    await navigator.clipboard.writeText(fragment.get("id_token"));
+    button.textContent = t("button.copied");
+  } catch {
+    button.textContent = t("button.copyJWTFailed");
+  }
+  setTimeout(() => { button.textContent = t("button.copyJWT"); }, 2000);
+});
 
-  const list = document.getElementById("checks");
-  for (const check of result.checks) {
-    const item = document.createElement("li");
-    const mark = document.createElement("span");
-    mark.className = `mark ${check.ok ? "ok" : "ng"}`;
-    mark.textContent = check.ok ? "✓" : "✕";
-    const text = document.createElement("div");
-    const title = document.createElement("div");
-    title.className = "check-title";
-    title.textContent = check.title;
-    const detail = document.createElement("div");
-    detail.className = "check-detail";
-    detail.textContent = check.detail;
-    text.append(title, detail);
-    item.append(mark, text);
-    list.append(item);
+/// A value from the verifier: a string is shown as it is — it came from the
+/// request or the token — and a note is put into words.
+function display(value) {
+  return typeof value === "string" ? value : t(`note.${value.note}`, value);
+}
+
+function setVerdict(outcome, title, message) {
+  const summary = $("summary");
+  summary.className = `result-summary${outcome === "ok" ? "" : " error"}`;
+  const verdict = summary.querySelector(".verdict");
+  // Dropped once a verdict is in, so switching language does not put
+  // "Checking…" back over it.
+  verdict.removeAttribute("data-i18n");
+  verdict.textContent = title;
+  summary.querySelector("p").textContent = message;
+}
+
+function element(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+
+function row(check) {
+  const tr = element("tr", undefined, check.ok ? "" : "fail");
+  const name = element("td");
+  name.append(element("code", check.id), element("small", t(`relation.${check.id}`)));
+  const expected = element("td");
+  expected.append(element("code", display(check.expected)));
+  const actual = element("td");
+  actual.append(element("code", display(check.actual)));
+  const verdict = element("td");
+  const mark = VALIDITY.has(check.id)
+    ? t(check.ok ? "mark.valid" : "mark.invalid")
+    : t(check.ok ? "mark.match" : "mark.mismatch");
+  verdict.append(element("span", mark, `badge ${check.ok ? "green" : "red"}`));
+  tr.append(name, expected, actual, verdict);
+  return tr;
+}
+
+/// Show what was sent and what came back before judging either.
+function renderExchange() {
+  renderParams($("request"), pending
+    ? [...new URL(pending.requestURL).searchParams].map(([name, value]) => ({ name, value }))
+    : [{ name: t("note.none"), value: "", why: t("why.noRecord") }]);
+
+  const received = [...fragment].map(([name, value]) => ({
+    name, value, ref: RESPONSE_REFS[name], why: RESPONSE_REFS[name] ? t(`why.response.${name}`) : undefined,
+  }));
+  renderParams($("response"), received.length
+    ? received
+    : [{ name: t("note.none"), value: "", why: t("why.noResponse") }]);
+  $("response-raw").textContent = location.href;
+}
+
+async function evaluate() {
+  const expected = SCENARIOS[scenario.value](recorded);
+  const body = $("comparison-body");
+  $("thumbprint-raw").textContent = t("result.noToken");
+  $("token-raw").textContent = t("result.noToken");
+
+  if (fragment.has("error")) {
+    // Section 3.1.2.6: the OP reports a refusal as an error response.
+    setVerdict("ng", t("verdict.error"),
+      `${fragment.get("error")} · ${fragment.get("error_description") ?? t("verdict.refused")}`);
+    body.replaceChildren(
+      row({ id: "error", expected: "id_token", actual: fragment.get("error"), ok: false }),
+      row(checkState(expected.state, fragment.get("state"))),
+    );
+    $("result-count").textContent = t("count.noToken");
+    return;
   }
 
-  renderParams(document.getElementById("claims"), Object.entries(result.payload).map(([name, value]) => ({
-    name,
-    value: typeof value === "object" ? JSON.stringify(value) : String(value),
-    ...(CLAIMS[name] ?? {}),
-  })));
+  if (!fragment.has("id_token")) {
+    setVerdict("ng", t("verdict.noResponse"), t("verdict.noResponseDetail"));
+    body.replaceChildren();
+    $("result-count").textContent = t("count.notReceived");
+    return;
+  }
 
-  document.getElementById("header").textContent = JSON.stringify(result.header, null, 2);
-  document.getElementById("payload").textContent = JSON.stringify(result.payload, null, 2);
-  details.hidden = false;
+  const idToken = fragment.get("id_token");
+  const result = await verifySelfIssuedIDToken(idToken, { audience: expected.audience, nonce: expected.nonce });
+  // state travels outside the token, so it is checked apart from it — and a
+  // mismatch no longer hides every other check.
+  const checks = [...result.checks, checkState(expected.state, fragment.get("state"))]
+    .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
+  console.info("[SIOP RP] checks", checks);
 
-  // One-shot: the nonce must not be reusable for a later response.
-  localStorage.removeItem(STORAGE_KEY);
+  const failed = checks.filter((check) => !check.ok);
+  if (failed.length === 0) {
+    // EndToEndRPTests waits for the English title, verdict.ok in i18n.js —
+    // Safari hands XCUITest no DOM ids — so change the two together.
+    setVerdict("ok", t("verdict.ok"), t("verdict.okDetail", { sub: result.payload.sub }));
+  } else if (!pending) {
+    // Most often this means the response landed in a different browser: iOS
+    // sends an https URL to the *default* browser, and the OP has no way to
+    // return to the specific browser that started the request. nonce and
+    // state live in that browser's storage, so the check fails closed.
+    setVerdict("ng", t("verdict.noRecord"), t("verdict.noRecordDetail"));
+  } else {
+    setVerdict("ng", t("verdict.failed"), t("verdict.failedDetail", { ids: failed.map((check) => check.id).join(" / ") }));
+  }
+
+  $("result-count").textContent = t("count.passed", { passed: checks.length - failed.length, total: checks.length });
+  body.replaceChildren(...checks.map(row));
+
+  if (result.thumbprint) {
+    const matches = result.thumbprint === result.payload.sub;
+    $("thumbprint-raw").textContent = [
+      canonicalJWK(result.payload.sub_jwk),
+      "", "SHA-256 → Base64url", result.thumbprint,
+      "", "ID Token.sub", String(result.payload.sub),
+      "", t(matches ? "mark.match" : "mark.mismatch"),
+    ].join("\n");
+  }
+  if (result.header) {
+    $("token-raw").textContent = [
+      "JOSE header", JSON.stringify(result.header, null, 2),
+      "", "Payload", JSON.stringify(result.payload, null, 2),
+      "", "JWT", idToken,
+    ].join("\n");
+    $("copy-token").disabled = false;
+  }
 }
+
+onLanguageChange(() => {
+  renderExchange();
+  evaluate();
+});
+renderExchange();
+await evaluate();

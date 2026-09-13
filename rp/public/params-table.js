@@ -1,61 +1,67 @@
-// Renders a parameter list as a table: the value plus why the parameter is
-// there. The point of this RP is to make each protocol field visible.
-// Rows can be read-only (received response) or editable (outgoing request).
+// Renders parameters as labelled fields: the value, the section it comes
+// from, and why it is there. The point of this RP is to make each protocol
+// field visible. Fields can be read-only (a received response) or editable
+// (the outgoing request).
 
-export function renderParams(table, rows) {
-  table.innerHTML = "";
-  for (const row of rows) {
-    table.append(buildRow(row));
-  }
+import { t } from "./i18n.js";
+
+export function renderParams(container, rows) {
+  container.replaceChildren(...rows.map(buildField));
 }
 
-function buildRow(row) {
-  const tr = document.createElement("tr");
-  const th = document.createElement("th");
-  const td = document.createElement("td");
+function buildField(row) {
+  const field = document.createElement("div");
+  field.className = "field";
 
+  const head = document.createElement("div");
+  head.className = "field-head";
   if (row.onNameChange) {
-    th.append(input(row.name, "パラメータ名", row.onNameChange));
+    head.append(input(row.name, t("field.name"), row.onNameChange));
   } else {
-    th.textContent = row.name;
+    const label = document.createElement("label");
+    label.textContent = row.name;
+    head.append(label);
   }
+  if (row.ref) head.append(badge(`§${row.ref}`));
+  // Marks a parameter the response will be compared against.
+  if (row.checked) head.append(badge(row.checked, "blue"));
+  field.append(head);
 
   if (row.onValueChange) {
     const line = document.createElement("div");
     line.className = "value-row";
-    line.append(input(row.value, "値", row.onValueChange));
+    const value = input(row.value, t("field.value"), row.onValueChange);
+    value.classList.add("protocol");
+    value.setAttribute("aria-label", row.name || t("field.value"));
+    line.append(value);
     if (row.onRemove) {
       const remove = document.createElement("button");
       remove.type = "button";
-      remove.className = "remove";
-      remove.textContent = "削除";
+      remove.textContent = t("field.remove");
       remove.addEventListener("click", row.onRemove);
       line.append(remove);
     }
-    td.append(line);
+    field.append(line);
   } else {
-    const value = document.createElement("div");
+    const value = document.createElement("code");
     value.className = "value";
-    value.textContent = row.value === undefined || row.value === "" ? "(なし)" : row.value;
-    td.append(value);
+    value.textContent = row.value === undefined || row.value === "" ? t("note.none") : row.value;
+    field.append(value);
   }
 
-  if (row.why || row.ref) {
-    const why = document.createElement("div");
-    why.className = "why";
-    if (row.ref) {
-      const ref = document.createElement("span");
-      ref.className = "ref";
-      ref.textContent = `Section ${row.ref}`;
-      why.append(ref);
-      if (row.why) why.append(document.createTextNode(" — "));
-    }
-    if (row.why) why.append(document.createTextNode(row.why));
-    td.append(why);
+  if (row.why) {
+    const why = document.createElement("small");
+    why.textContent = row.why;
+    field.append(why);
   }
+  return field;
+}
 
-  tr.append(th, td);
-  return tr;
+function badge(text, kind) {
+  const element = document.createElement("span");
+  element.className = kind ? `badge ${kind}` : "badge";
+  element.textContent = text;
+  return element;
 }
 
 function input(value, placeholder, onChange) {
@@ -65,6 +71,7 @@ function input(value, placeholder, onChange) {
   field.placeholder = placeholder;
   field.spellcheck = false;
   field.autocapitalize = "off";
+  field.autocomplete = "off";
   field.addEventListener("input", () => onChange(field.value));
   return field;
 }

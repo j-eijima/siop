@@ -13,13 +13,19 @@ import XCTest
 /// so a round trip only completes when the RP page was opened in the default
 /// browser. On the simulator that is always Safari.
 final class EndToEndRPTests: XCTestCase {
-    private static let rpURL = URL(string: "http://localhost:8080/index.html")!
+    /// In English: Safari follows the simulator's language, and the RP's
+    /// wording is what the test reads.
+    private static let rpURL = URL(string: "http://localhost:8080/index.html?lang=en")!
 
     private let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
 
     override func setUpWithError() throws {
         try skipUnlessRPIsRunning()
         continueAfterFailure = false
+        // An app left suspended by an earlier run answers no accessibility
+        // queries, so waiting for its consent screen would fail outright
+        // rather than time out. The handoff launches it afresh either way.
+        XCUIApplication().terminate()
     }
 
     override func tearDown() {
@@ -61,7 +67,9 @@ final class EndToEndRPTests: XCTestCase {
     func testRPRequestIsIssuedAndVerified() {
         openRP()
 
-        let start = safari.links["SIOP アプリで認証する"]
+        // Found by its text: Safari hands XCUITest no DOM ids, only what an
+        // element reads as. The RP's page notes where these strings live.
+        let start = safari.links["Choose an identity in SIOP →"]
         XCTAssertTrue(start.waitForExistence(timeout: 30), "RP のページが表示されません")
         attach(safari, "rp-index")
         // Elements exist in the tree while off-screen; only hittable ones tap.
@@ -71,7 +79,9 @@ final class EndToEndRPTests: XCTestCase {
         start.tap()
 
         let app = XCUIApplication()
-        let approve = app.buttons["この識別子で応答する"]
+        // Found by identifier: its title depends on whether this RP has an
+        // identity on the simulator yet.
+        let approve = app.buttons["approve"]
         XCTAssertTrue(waitForElement(approve, inPageDialogOf: safari), "同意画面が表示されません")
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "e2e-consent"
@@ -80,7 +90,7 @@ final class EndToEndRPTests: XCTestCase {
         approve.tap()
 
         // Section 7.5: the RP verifies iss / sub / sub_jwk / signature / aud / nonce.
-        XCTAssertTrue(safari.staticTexts["検証に成功しました"].waitForExistence(timeout: 30),
+        XCTAssertTrue(safari.staticTexts["✓ Authentication verified"].waitForExistence(timeout: 30),
                       "RP がトークンを検証できませんでした")
         let verified = XCTAttachment(screenshot: safari.screenshot())
         verified.name = "e2e-verified"

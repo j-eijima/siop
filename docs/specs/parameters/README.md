@@ -8,10 +8,12 @@ fields, and validation expectations line up. Everything else in the UI comes aft
 
 ## Where this stands
 
-A requirement on both sides, met so far only by the
-[HTML UI mock](../../../rp/public/mock.html), which runs real WebCrypto operations against
-temporary in-memory keys without contacting an external RP. The mock is a demonstration of the
-intended behaviour, not an implementation of it and not an interoperability test.
+Built on both sides. The iOS app shows every parameter of a received request as it arrived, and
+marks each value of the response preview with where it comes from; Android does not do this yet.
+The test RP in `rp/` shows the request before it is sent, marks what the response will be checked
+against, and lays each check beside what was expected. The
+[HTML UI mock](../../../rp/public/mock.html) shows both with temporary in-memory keys; it is a
+demonstration, not an interoperability test.
 
 ## Constraints
 

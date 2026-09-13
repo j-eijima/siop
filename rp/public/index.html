@@ -1,54 +1,85 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SIOP テスト RP</title>
+<title data-i18n="page.title.request">SIOP test RP</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<header class="topbar">
+  <div class="brand"><span class="logo" aria-hidden="true">s</span><div><strong>SIOP</strong><small>TEST RELYING PARTY</small></div></div>
+  <div class="topbar-end">
+    <div class="topnote"><span class="dot"></span><span data-i18n="top.note">Verified entirely in this browser</span></div>
+    <div class="lang-switch" role="group" data-i18n-label="lang.label" aria-label="Language">
+      <button type="button" data-lang="en" lang="en">English</button>
+      <button type="button" data-lang="ja" lang="ja">日本語</button>
+    </div>
+  </div>
+</header>
 <main>
-  <h1>SIOP テスト RP</h1>
-  <p class="lede">
-    Self-Issued OpenID Provider (OpenID Connect Core 1.0 7章) に認証リクエストを送り、
-    返ってきた ID Token をこのページ内で検証します。
-    各パラメータは編集できるので、仕様に反したリクエストを送ったときの OP の挙動も試せます。
-  </p>
+  <div class="intro">
+    <div>
+      <p class="eyebrow" data-i18n="eyebrow.request">RELYING PARTY / AUTHENTICATION REQUEST</p>
+      <h1 data-i18n="heading">Match request and response, one value at a time.</h1>
+      <p class="subtitle" data-i18n="subtitle.request">Check what will be sent, hand it to the SIOP, and verify the ID Token that comes back on this page.</p>
+    </div>
+    <span class="badge green">OpenID Connect Core 1.0 · §7</span>
+  </div>
+  <div class="flow" data-i18n-label="flow.label" aria-label="Progress of the authentication">
+    <span class="step active"><b>1</b><span data-i18n="flow.request">RP requests</span></span><span class="arrow">→</span>
+    <span class="step"><b>2</b><span data-i18n="flow.sign">Identity chosen and signed</span></span><span class="arrow">→</span>
+    <span class="step"><b>3</b><span data-i18n="flow.check">RP checks</span></span>
+  </div>
 
-  <h2>認証リクエストのパラメータ</h2>
-  <div class="card">
-    <table class="params" id="params"></table>
-    <div class="actions">
-      <button class="secondary" type="button" id="addParam">パラメータを追加</button>
-      <button class="secondary" type="button" id="regenerate">nonce / state を再生成</button>
-      <button class="secondary" type="button" id="reset">既定値に戻す</button>
+  <div class="rp-grid request-grid">
+    <section class="panel" aria-labelledby="request-title">
+      <div class="panel-head">
+        <div><h2 id="request-title" data-i18n="request.title">Authentication request</h2><small data-i18n="request.lede">Everything is editable. Values outside the spec are sent as they are.</small></div>
+        <span class="badge blue" data-i18n="badge.byRP">Built by the RP</span>
+      </div>
+      <div class="pad">
+        <div class="fields" id="params"></div>
+        <div class="form-actions">
+          <button type="button" id="addParam" data-i18n="button.addParam">Add parameter</button>
+          <button type="button" id="regenerate" data-i18n="button.regenerate">Regenerate nonce / state</button>
+          <button type="button" id="reset" data-i18n="button.reset">Defaults</button>
+        </div>
+        <div class="warnings" id="warnings" role="status" hidden>
+          <h3 data-i18n="warnings.title">Departures from the spec</h3>
+          <ul id="warningList"></ul>
+        </div>
+      </div>
+      <div class="actionbar">
+        <small data-i18n="action.keep">Values marked “Checked in the response” are kept, then compared with what comes back.</small>
+        <!-- EndToEndRPTests finds this link by its English text — Safari hands
+             XCUITest no DOM ids — so change the two together. -->
+        <a class="button primary" id="start-authentication" href="#" data-i18n="action.start">Choose an identity in SIOP →</a>
+      </div>
+    </section>
+
+    <div class="stack">
+      <section class="panel" aria-labelledby="url-title">
+        <div class="panel-head"><h2 id="url-title" data-i18n="url.title">Request to be sent</h2><button type="button" class="quiet" id="copy" data-i18n="button.copyURL">Copy URL</button></div>
+        <div class="pad"><pre id="requestURL"></pre></div>
+      </section>
+      <section class="panel" aria-labelledby="expectations-title">
+        <div class="panel-head"><h2 id="expectations-title" data-i18n="expect.title">Values checked in the response</h2><span class="badge" data-i18n="expect.badge">Kept in this browser</span></div>
+        <div class="pad">
+          <div class="fields" id="expectations"></div>
+          <p class="hint" data-i18n="expect.hint">Kept in localStorage and removed once the callback has checked them, so a nonce never authenticates twice.</p>
+        </div>
+      </section>
+      <section class="panel" aria-labelledby="browser-title">
+        <div class="pad">
+          <h3 id="browser-title" data-i18n="browser.title">Open this in your default browser</h3>
+          <p class="hint" data-i18n-html="browser.hint"></p>
+        </div>
+      </section>
     </div>
   </div>
 
-  <div id="warnings" hidden>
-    <h2>仕様との差分</h2>
-    <div class="card"><ul class="checks" id="warningList"></ul></div>
-  </div>
-
-  <h2>送信する認証リクエスト</h2>
-  <div class="card"><pre id="requestURL"></pre></div>
-
-  <p class="note">
-    nonce と state は localStorage に控え、コールバック側で照合します。
-    実機で試す場合は Mac の LAN アドレスでこのページを開いてください
-    (client_id / redirect_uri の既定値は開いている URL から作られます)。
-  </p>
-  <p class="note">
-    <strong>既定のブラウザで開いてください。</strong>
-    OP は <code>redirect_uri</code> を開くだけで、リクエストを始めたブラウザを指定できません。
-    iOS は https を既定ブラウザに渡すため、別のブラウザで始めると応答が戻らず、
-    nonce / state の照合に失敗します。
-  </p>
-
-  <div class="sticky-actions">
-    <a class="button" id="startLink" href="#">SIOP アプリで認証する</a>
-    <button class="secondary" type="button" id="copy">URL をコピー</button>
-  </div>
+  <footer><span data-i18n="footer.static">Test RP · static files only · the ID Token is never sent to a server</span><span data-i18n="footer.crypto">Signatures, thumbprints and checks run on WebCrypto</span></footer>
 </main>
 <script type="module" src="app.js"></script>
 </body>

@@ -5,10 +5,13 @@ public enum SelfIssuedIDToken {
     /// Section 7.4: the issuer of a self-issued ID Token.
     public static let issuer = "https://self-issued.me"
 
+    /// How long an issued token stays valid, unless the caller says otherwise.
+    public static let lifetime: TimeInterval = 600
+
     public static func issue(
         for request: AuthorizationRequest,
         key: SIOPKeyProvider,
-        expiresIn: TimeInterval = 600,
+        expiresIn: TimeInterval = lifetime,
         now: Date = Date()
     ) throws -> String {
         let jwk = try key.publicJWK()

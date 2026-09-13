@@ -25,7 +25,16 @@ public struct SelfIssuedOP {
     /// Issues an ID Token for an already-parsed request, e.g. after the user
     /// has approved it on a consent screen.
     public func respond(to request: AuthorizationRequest, now: Date = Date()) throws -> AuthenticationResponse {
-        let key = try keyStore.keyProvider(for: request.clientID)
+        try Self.respond(to: request, signingWith: try keyStore.keyProvider(for: request.clientID), now: now)
+    }
+
+    /// Issues an ID Token signed with a key the caller has already chosen —
+    /// the identity the user picked on a consent screen, say.
+    public static func respond(
+        to request: AuthorizationRequest,
+        signingWith key: SIOPKeyProvider,
+        now: Date = Date()
+    ) throws -> AuthenticationResponse {
         let idToken = try SelfIssuedIDToken.issue(for: request, key: key, now: now)
         return try AuthenticationResponse(idToken: idToken, state: request.state, redirectURI: request.clientID)
     }

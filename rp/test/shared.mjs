@@ -47,6 +47,11 @@ export function describeIssuedToken(title, load) {
       const failed = result.checks.filter((check) => !check.ok);
       assert.deepEqual(failed, [], `失敗した項目: ${failed.map((c) => c.id).join(", ")}`);
       assert.equal(result.ok, true);
+      // The result page lays each expectation beside what arrived, so every
+      // check has to carry both.
+      for (const check of result.checks) {
+        assert.ok(check.expected && check.actual, `${check.id} に期待値か実際の値が無い`);
+      }
       assert.equal(result.payload.iss, "https://self-issued.me");
       // Both implementations must derive the same subject from the same key.
       assert.equal(result.payload.sub, expectedSubject);
@@ -88,6 +93,20 @@ export function describeIssuedToken(title, load) {
       });
       assert.equal(result.ok, false);
       assert.equal(checkFor(result, "nonce").ok, false);
+      assert.equal(checkFor(result, "nonce").expected, "another-nonce");
+      assert.equal(checkFor(result, "nonce").actual, NONCE);
+      // A failing check must not take the others down with it.
+      assert.equal(checkFor(result, "signature").ok, true);
+    });
+
+    // With no record of the request there is nothing to hold aud and nonce
+    // to, and that must fail rather than pass for want of a comparison.
+    it("リクエストの記録が無ければ aud と nonce は通らない", async () => {
+      const result = await verifySelfIssuedIDToken(idToken, { audience: null, nonce: null, now: at() });
+      assert.equal(result.ok, false);
+      assert.equal(checkFor(result, "aud").ok, false);
+      assert.equal(checkFor(result, "nonce").ok, false);
+      assert.equal(checkFor(result, "signature").ok, true);
     });
 
     it("期限を過ぎたトークンは弾かれる", async () => {

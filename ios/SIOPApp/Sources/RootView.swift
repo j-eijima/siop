@@ -9,54 +9,56 @@ struct RootView: View {
             Group {
                 switch session.phase {
                 case .idle:
-                    IdentityView(keyState: session.keyState)
+                    HomeView()
                 case let .consent(request):
                     ConsentView(request: request)
                 case let .delivering(clientID):
                     ResultView(
                         symbol: "paperplane.fill",
                         tint: .accentColor,
-                        title: "応答を返しています",
-                        message: "\(clientID) を開いています。",
+                        title: "Returning the response",
+                        message: Text("Opening \(clientID)."),
                         detail: nil
                     )
                 case let .sent(clientID, redirectURL):
                     ResultView(
                         symbol: "checkmark.seal.fill",
                         tint: .green,
-                        title: "ID Token を返しました",
-                        message: "\(clientID) に応答を送信しました。",
+                        title: "ID Token returned",
+                        message: Text("Sent the response to \(clientID)."),
                         detail: redirectURL.absoluteString
                     )
                 case let .undeliverable(clientID, redirectURL):
                     ResultView(
                         symbol: "arrow.uturn.left.circle.fill",
                         tint: .orange,
-                        title: "応答を渡せませんでした",
-                        message: "\(clientID) を開けるアプリがありません。ID Token は発行済みですが、RP には届いていません。",
+                        title: "Response not delivered",
+                        message: Text("No app can open \(clientID). The ID Token was issued but has not reached the RP."),
                         detail: redirectURL.absoluteString
                     )
                 case let .declined(clientID):
                     ResultView(
                         symbol: "hand.raised.fill",
                         tint: .orange,
-                        title: "リクエストを拒否しました",
-                        message: "\(clientID) に access_denied を返しました。",
+                        title: "Request declined",
+                        message: Text("Returned access_denied to \(clientID)."),
                         detail: nil
                     )
                 case let .failed(message):
                     ResultView(
                         symbol: "exclamationmark.triangle.fill",
                         tint: .red,
-                        title: "処理できませんでした",
-                        message: message,
+                        title: "Could not process the request",
+                        // Already translated where it was made.
+                        message: Text(verbatim: message),
                         detail: nil
                     )
                 }
             }
-            .navigationTitle("Self-Issued OP")
+            .navigationTitle(Text(verbatim: "Self-Issued OP"))
             .navigationBarTitleDisplayMode(.inline)
         }
+        .modifier(ReportsProblems())
     }
 }
 
@@ -66,8 +68,8 @@ private struct ResultView: View {
 
     let symbol: String
     let tint: Color
-    let title: String
-    let message: String
+    let title: LocalizedStringKey
+    let message: Text
     let detail: String?
 
     var body: some View {
@@ -78,13 +80,13 @@ private struct ResultView: View {
                 .foregroundStyle(tint)
             Text(title)
                 .font(.title3.bold())
-            Text(message)
+            message
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             if let detail {
                 ScrollView {
-                    Text(detail)
+                    Text(verbatim: detail)
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -95,7 +97,7 @@ private struct ResultView: View {
                 .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
             }
             Spacer()
-            Button("閉じる") { session.reset() }
+            Button("Close") { session.reset() }
                 .buttonStyle(.bordered)
         }
         .padding(24)

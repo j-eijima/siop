@@ -7,12 +7,13 @@ one screen a person must read, so it is specified rather than left to the implem
 
 ## Where this stands
 
-Partly built. Both apps receive the request on `openid:` and show a consent screen carrying the
-requesting `client_id`, the requested scope, `response_type`, `nonce` and `state`, and either the
-subject already established for that Relying Party or a note that responding will create one.
-Declining already returns `access_denied`. Not built: the public key is not shown before signing,
-the full parameter view described in [parameters/](../parameters/) is not there, and neither is the
-identity choice described in [identity/](../identity/).
+Built on iOS: the consent screen shows the request as it arrived, lets the user choose or create
+the identity to answer as ([identity/](../identity/)), and previews every value that will be
+signed, public key included, each marked with where it comes from ([parameters/](../parameters/)).
+Declining returns `access_denied` on both platforms. Android shows the requesting `client_id`, the
+requested scope, `response_type`, `nonce` and `state`, and either the subject already established
+for that Relying Party or a note that responding will create one; it does not show the public key
+or offer a choice of identity.
 
 ## Behaviour
 

@@ -9,4 +9,6 @@ public enum SIOPError: Error, Equatable {
     case derParsingFailed
     case invalidKey
     case invalidToken(String)
+    /// The Keychain refused an operation, with the status it gave.
+    case keyStore(OSStatus)
 }

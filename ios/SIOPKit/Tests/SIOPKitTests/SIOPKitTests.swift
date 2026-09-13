@@ -244,3 +244,129 @@ final class MetadataTests: XCTestCase {
         XCTAssertEqual(configuration["request_uri_parameter_supported"] as? Bool, false)
     }
 }
+
+final class IdentityStoreTests: XCTestCase {
+    private let one = "https://one.example/cb"
+    private let two = "https://two.example/cb"
+
+    /// Counts key generations, so that "creates no key" is asserted rather
+    /// than assumed.
+    private final class CountingKeys: SIOPIdentityKeys {
+        let base = InMemoryIdentityKeys()
+        private(set) var created = 0
+
+        func key(tag: String) throws -> SIOPKeyProvider? { try base.key(tag: tag) }
+        func createKey(tag: String) throws -> SIOPKeyProvider {
+            created += 1
+            return try base.createKey(tag: tag)
+        }
+        func removeKey(tag: String) throws { try base.removeKey(tag: tag) }
+    }
+
+    /// An identity answers one RP. Offering it to another would let the two
+    /// discover they share a user.
+    func testAnRPIsOfferedOnlyItsOwnIdentities() throws {
+        let store = SIOPIdentityStore.ephemeral()
+        let mine = try store.createIdentity(for: one, label: "a")
+        _ = try store.createIdentity(for: two, label: "b")
+        XCTAssertEqual(try store.identities(for: one).map(\.id), [mine.id])
+    }
+
+    func testSeveralIdentitiesForOneRPPresentDifferentSubjects() throws {
+        let store = SIOPIdentityStore.ephemeral()
+        let personal = try store.createIdentity(for: one, label: "personal")
+        let testing = try store.createIdentity(for: one, label: "testing")
+        XCTAssertNotEqual(
+            try store.publicJWK(of: personal).thumbprint(),
+            try store.publicJWK(of: testing).thumbprint()
+        )
+    }
+
+    func testRelabellingChangesTheNamesAndNotTheSubject() throws {
+        let store = SIOPIdentityStore.ephemeral()
+        let identity = try store.createIdentity(for: one, label: "before", note: "")
+        let subject = try store.publicJWK(of: identity).thumbprint()
+
+        let renamed = try store.relabel(identity, label: "after", note: "note")
+
+        XCTAssertEqual(renamed.label, "after")
+        XCTAssertEqual(renamed.note, "note")
+        XCTAssertEqual(try store.publicJWK(of: renamed).thumbprint(), subject)
+    }
+
+    func testDeletingRemovesTheKeyAsWellAsTheRecord() throws {
+        let store = SIOPIdentityStore.ephemeral()
+        let identity = try store.createIdentity(for: one)
+        try store.delete(identity)
+
+        XCTAssertTrue(try store.identities(for: one).isEmpty)
+        XCTAssertThrowsError(try store.keyProvider(for: identity))
+    }
+
+    /// Looking up an RP's identities happens as soon as a request arrives,
+    /// before anyone has agreed to anything. It must not cost a key.
+    func testLookingUpIdentitiesCreatesNoKey() throws {
+        let keys = CountingKeys()
+        let store = SIOPIdentityStore(records: InMemoryIdentityRecords(), keys: keys, tagPrefix: "test", adoptsPerRPKeys: true)
+        XCTAssertTrue(try store.identities(for: one).isEmpty)
+        XCTAssertEqual(keys.created, 0)
+    }
+
+    func testTheIdentityUsedLastIsOfferedFirst() throws {
+        var clock = Date(timeIntervalSince1970: 0)
+        let store = SIOPIdentityStore(records: InMemoryIdentityRecords(), keys: InMemoryIdentityKeys(), tagPrefix: "test", now: { clock })
+        let first = try store.createIdentity(for: one, label: "first")
+        clock += 1
+        let second = try store.createIdentity(for: one, label: "second")
+        XCTAssertEqual(try store.identities(for: one).map(\.id), [first.id, second.id], "未使用なら古い順")
+
+        clock += 1
+        try store.markUsed(second)
+        XCTAssertEqual(try store.identities(for: one).map(\.id), [second.id, first.id])
+
+        clock += 1
+        try store.markUsed(first)
+        XCTAssertEqual(try store.identities(for: one).map(\.id), [first.id, second.id])
+    }
+
+    /// A device that ran the key-per-RP version holds a key for each RP it
+    /// answered, and those RPs know the subject that key produces. Taking the
+    /// key over keeps the user recognisable to them.
+    func testAKeyPerRPKeyIsTakenOverWithTheSubjectTheRPAlreadyKnows() throws {
+        let keys = CountingKeys()
+        let legacy = try keys.base.createKey(tag: KeychainKeyStore.tag(prefix: "test", clientID: one))
+        let store = SIOPIdentityStore(records: InMemoryIdentityRecords(), keys: keys, tagPrefix: "test", adoptsPerRPKeys: true)
+
+        let adopted = try store.identities(for: one)
+        XCTAssertEqual(adopted.count, 1)
+        XCTAssertEqual(try store.publicJWK(of: adopted[0]).thumbprint(), try legacy.publicJWK().thumbprint())
+        XCTAssertNotNil(adopted[0].lastUsedAt, "応答済みの識別子として扱っていない")
+
+        XCTAssertEqual(try store.identities(for: one).count, 1, "引き継ぎを繰り返している")
+        XCTAssertTrue(try store.identities(for: two).isEmpty, "別の RP に引き継いでいる")
+        XCTAssertEqual(keys.created, 0)
+    }
+
+    func testATokenSignedAsAnIdentityCarriesItsSubject() throws {
+        let store = SIOPIdentityStore.ephemeral()
+        let identity = try store.createIdentity(for: one)
+        let request = try AuthorizationRequest(
+            url: URL(string: "openid://?response_type=id_token&scope=openid&nonce=n1&client_id=https%3A%2F%2Fone.example%2Fcb")!
+        )
+
+        let response = try SelfIssuedOP.respond(to: request, signingWith: try store.keyProvider(for: identity))
+
+        let payload = try SelfIssuedIDTokenValidator.validate(idToken: response.idToken, expectedAudience: one, expectedNonce: "n1")
+        XCTAssertEqual(payload["sub"] as? String, try store.publicJWK(of: identity).thumbprint())
+    }
+
+    /// The consent screen shows what arrived, so the parsed request has to
+    /// keep it — in order, and including what the parser does not use.
+    func testTheRequestKeepsEveryParameterAsItArrived() throws {
+        let request = try AuthorizationRequest(
+            url: URL(string: "openid://?response_type=id_token&client_id=https%3A%2F%2Fone.example%2Fcb&scope=openid%20profile&nonce=n1&extra=kept")!
+        )
+        XCTAssertEqual(request.receivedParameters.map(\.name), ["response_type", "client_id", "scope", "nonce", "extra"])
+        XCTAssertEqual(request.receivedParameters.first { $0.name == "scope" }?.value, "openid profile")
+    }
+}

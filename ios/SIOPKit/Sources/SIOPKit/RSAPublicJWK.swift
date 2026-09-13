@@ -17,11 +17,16 @@ public struct RSAPublicJWK: Equatable {
         ["kty": kty, "n": n, "e": e]
     }
 
+    /// The members RFC 7638 hashes, in the order it requires and without
+    /// whitespace — the exact input to `thumbprint()`.
+    public var canonicalJSON: String {
+        "{\"e\":\"\(e)\",\"kty\":\"\(kty)\",\"n\":\"\(n)\"}"
+    }
+
     /// RFC 7638 JWK thumbprint (SHA-256, base64url) — used as the `sub` claim
     /// value of a self-issued ID Token (OpenID Connect Core 1.0 Section 7.4).
     public func thumbprint() -> String {
-        let canonical = "{\"e\":\"\(e)\",\"kty\":\"\(kty)\",\"n\":\"\(n)\"}"
-        let digest = SHA256.hash(data: Data(canonical.utf8))
+        let digest = SHA256.hash(data: Data(canonicalJSON.utf8))
         return Base64URL.encode(Data(digest))
     }
 

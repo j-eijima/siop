@@ -58,6 +58,11 @@ public final class SecKeyProvider: SIOPKeyProvider {
     /// across authentications from the same device.
     public static func loadOrCreate(tag: String) throws -> SecKeyProvider {
         if let existing = try load(tag: tag) { return existing }
+        return try create(tag: tag)
+    }
+
+    /// Generates a key pair and stores it permanently under `tag`.
+    public static func create(tag: String) throws -> SecKeyProvider {
         let tagData = Data(tag.utf8)
         let attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
@@ -72,6 +77,19 @@ public final class SecKeyProvider: SIOPKeyProvider {
             throw SIOPError.keyGenerationFailed(describe(error))
         }
         return try SecKeyProvider(privateKey: key)
+    }
+
+    /// Removes the key stored under `tag`. Nothing to remove is not an error.
+    public static func delete(tag: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: Data(tag.utf8),
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+        ]
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw SIOPError.keyStore(status)
+        }
     }
 
     public func publicJWK() throws -> RSAPublicJWK {

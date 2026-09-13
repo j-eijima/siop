@@ -13,6 +13,9 @@ public struct AuthorizationRequest: Equatable {
     public let claims: String?
     /// Raw JSON of the registration parameter, if any (Section 7.2.1).
     public let registration: String?
+    /// Every query parameter as it arrived, in order, so that a screen can show
+    /// what was actually sent rather than what was parsed out of it.
+    public let receivedParameters: [URLQueryItem]
 
     public init(url: URL) throws {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
@@ -58,5 +61,6 @@ public struct AuthorizationRequest: Equatable {
         self.idTokenHint = params["id_token_hint"]
         self.claims = params["claims"]
         self.registration = params["registration"]
+        self.receivedParameters = components.queryItems ?? []
     }
 }

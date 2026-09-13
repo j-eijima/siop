@@ -3,7 +3,8 @@ import SwiftUI
 import UIKit
 
 /// Drives one authentication request through consent to the response
-/// delivered back to the RP (OpenID Connect Core 1.0 Section 7.3-7.4).
+/// delivered back to the RP (OpenID Connect Core 1.0 Section 7.3-7.4), and
+/// keeps the identities the user answers as.
 @MainActor
 final class AuthenticationSession: ObservableObject {
     enum Phase {
@@ -18,20 +19,25 @@ final class AuthenticationSession: ObservableObject {
         case failed(String)
     }
 
-    /// There is no single identity: a separate key, and so a separate subject,
-    /// is presented to each RP.
-    struct KeyState {
-        /// False when the Keychain was unavailable and in-memory keys are in
-        /// use, which means subjects will not survive a relaunch.
-        let isPersistent: Bool
-    }
+    /// Shared with the key-per-RP version, so that the keys it made for each
+    /// RP are found and taken over as identities.
+    private static let tagPrefix = "jp.co.pendako.siop.key"
 
-    private static let keyTag = "jp.co.pendako.siop.key"
+    /// False when the Keychain was unavailable and identities live in memory,
+    /// which means they will not survive a relaunch.
+    let isPersistent: Bool
 
     @Published private(set) var phase: Phase = .idle
-    private(set) var keyState: KeyState?
+    /// Every identity on the device, in the order they are offered.
+    @Published private(set) var identities: [SIOPIdentity] = []
+    /// The public key of each identity whose key could be read. An identity
+    /// missing from here is still listed, but cannot answer.
+    @Published private(set) var publicKeys: [SIOPIdentity.ID: RSAPublicJWK] = [:]
+    /// An identity operation that failed, to be shown and then cleared.
+    @Published var problem: String?
 
-    private var op: SelfIssuedOP?
+    private let store: SIOPIdentityStore
+    private let openURL: (URL, @escaping (Bool) -> Void) -> Void
 
     /// Opening a redirect completes asynchronously. Anything that moves on from
     /// the request in flight bumps this, so a completion that lands afterwards
@@ -42,46 +48,90 @@ final class AuthenticationSession: ObservableObject {
     /// could handle the URL. Injected so the delivery race can be tested
     /// without a real redirect.
     init(
-        keyStore: SIOPKeyStore? = nil,
+        store: SIOPIdentityStore? = nil,
         open: @escaping (URL, @escaping (Bool) -> Void) -> Void = { url, completion in
             UIApplication.shared.open(url, completionHandler: completion)
         }
     ) {
-        self.openURL = open
-        if let keyStore {
-            op = SelfIssuedOP(keyStore: keyStore)
-            keyState = KeyState(isPersistent: false)
+        openURL = open
+        if let store {
+            self.store = store
+            isPersistent = false
         } else {
-            let (store, isPersistent) = Self.makeKeyStore()
-            op = SelfIssuedOP(keyStore: store)
-            keyState = KeyState(isPersistent: isPersistent)
+            let (made, persistent) = Self.makeStore()
+            self.store = made
+            isPersistent = persistent
         }
+        refresh()
     }
 
-    private let openURL: (URL, @escaping (Bool) -> Void) -> Void
-
-    /// Prefers Keychain-backed keys so subjects stay stable across launches,
-    /// falling back to ephemeral ones so the app remains usable.
-    private static func makeKeyStore() -> (SIOPKeyStore, Bool) {
-        let keychain = KeychainKeyStore(tagPrefix: keyTag)
+    /// Prefers the Keychain so identities survive relaunches, falling back to
+    /// memory so the app remains usable. The Keychain is proven by reading
+    /// from it, which creates nothing.
+    private static func makeStore() -> (SIOPIdentityStore, Bool) {
+        let keychain = SIOPIdentityStore.keychain(tagPrefix: tagPrefix)
         do {
-            // Proves the Keychain is usable before relying on it for every RP.
-            _ = try keychain.keyProvider(for: "https://self-issued.me/probe")
+            _ = try keychain.allIdentities()
             return (keychain, true)
         } catch {
-            return (EphemeralKeyStore(), false)
+            return (.ephemeral(), false)
         }
     }
 
-    /// The identifier already established with `clientID`, or nil if this RP
-    /// has not been answered before.
-    ///
-    /// Deliberately does not create one: `client_id` comes from whoever sent
-    /// the request, and making a key costs an RSA generation and a permanent
-    /// Keychain entry. A stream of unanswered requests must not be able to
-    /// fill the Keychain or stall the screen.
-    func establishedSubject(for clientID: String) -> String? {
-        try? op?.keyStore.existingSubject(for: clientID)
+    // MARK: - Identities
+
+    /// The identities that may answer `clientID`, in the order to offer them.
+    func identities(for clientID: String) -> [SIOPIdentity] {
+        identities.filter { $0.clientID == clientID }
+    }
+
+    func subject(of identity: SIOPIdentity) -> String? {
+        publicKeys[identity.id]?.thumbprint()
+    }
+
+    /// Makes a key, so only ever at the user's explicit request.
+    @discardableResult
+    func createIdentity(for clientID: String, label: String, note: String) -> SIOPIdentity? {
+        do {
+            let created = try store.createIdentity(for: clientID, label: label, note: note)
+            refresh()
+            return created
+        } catch {
+            problem = String(localized: "Could not create the identity: \(Self.describe(error))")
+            return nil
+        }
+    }
+
+    func relabel(_ identity: SIOPIdentity, label: String, note: String) {
+        let current = identities.first { $0.id == identity.id } ?? identity
+        do {
+            _ = try store.relabel(current, label: label, note: note)
+            refresh()
+        } catch {
+            problem = String(localized: "Could not save: \(Self.describe(error))")
+        }
+    }
+
+    func delete(_ identity: SIOPIdentity) {
+        do {
+            try store.delete(identity)
+            refresh()
+        } catch {
+            problem = String(localized: "Could not delete: \(Self.describe(error))")
+        }
+    }
+
+    private func refresh() {
+        do {
+            identities = try store.allIdentities()
+        } catch {
+            problem = String(localized: "Could not load identities: \(Self.describe(error))")
+        }
+        var keys: [SIOPIdentity.ID: RSAPublicJWK] = [:]
+        for identity in identities {
+            keys[identity.id] = try? store.publicJWK(of: identity)
+        }
+        publicKeys = keys
     }
 
     // MARK: - Request handling
@@ -107,19 +157,32 @@ final class AuthenticationSession: ObservableObject {
     func receive(_ url: URL) {
         requestGeneration += 1
         do {
-            phase = .consent(try AuthorizationRequest(url: url))
+            let request = try AuthorizationRequest(url: url)
+            // Takes over the key the key-per-RP version made for this RP, if
+            // there is one, so it is offered. Creates no key: nobody has
+            // answered anything yet.
+            _ = try? store.identities(for: request.clientID)
+            refresh()
+            phase = .consent(request)
         } catch {
             phase = .failed(Self.describe(error))
         }
     }
 
-    func approve(_ request: AuthorizationRequest) {
-        guard let op else {
-            phase = .failed("鍵が利用できません")
+    /// Signs as `identity`, or — when there is none to sign as — as a new
+    /// identity for this RP, made now because the user has just said to
+    /// answer (docs/decisions/0004).
+    func approve(_ request: AuthorizationRequest, as identity: SIOPIdentity?) {
+        if let identity, identity.clientID != request.clientID {
+            // Two RPs answered by one identity would be handed one subject.
+            phase = .failed(String(localized: "This identity answers only \(identity.clientID). It cannot answer another RP."))
             return
         }
         do {
-            let response = try op.respond(to: request)
+            let signer = try identity ?? store.createIdentity(for: request.clientID)
+            let response = try SelfIssuedOP.respond(to: request, signingWith: try store.keyProvider(for: signer))
+            _ = try? store.markUsed(signer)
+            refresh()
             deliver(response.redirectURL, to: request.clientID) { clientID, url in
                 .sent(clientID: clientID, redirectURL: url)
             }
@@ -161,8 +224,6 @@ final class AuthenticationSession: ObservableObject {
         }
     }
 
-
-
     func reset() {
         requestGeneration += 1
         phase = .idle
@@ -170,19 +231,24 @@ final class AuthenticationSession: ObservableObject {
 
     // MARK: - Errors
 
+    /// Shown to the user, so translated. The reasons SIOPKit gives are
+    /// protocol detail — "nonce is required" — and stay as they are.
     private static func describe(_ error: Error) -> String {
         guard let error = error as? SIOPError else {
             return String(describing: error)
         }
         switch error {
-        case let .invalidRequest(reason): return "リクエストが不正です: \(reason)"
-        case let .unsupportedResponseType(type): return "未対応の response_type です: \(type)"
-        case .invalidScope: return "scope に openid が含まれていません"
-        case let .keyGenerationFailed(reason): return "鍵の生成に失敗しました: \(reason ?? "不明")"
-        case let .signingFailed(reason): return "署名に失敗しました: \(reason ?? "不明")"
-        case .derParsingFailed: return "鍵の解析に失敗しました"
-        case .invalidKey: return "鍵が不正です"
-        case let .invalidToken(reason): return "ID Token が不正です: \(reason)"
+        case let .invalidRequest(reason): return String(localized: "Invalid request: \(reason)")
+        case let .unsupportedResponseType(type): return String(localized: "Unsupported response_type: \(type)")
+        case .invalidScope: return String(localized: "scope does not include openid")
+        case let .keyGenerationFailed(reason):
+            return String(localized: "Key generation failed: \(reason ?? String(localized: "unknown"))")
+        case let .signingFailed(reason):
+            return String(localized: "Signing failed: \(reason ?? String(localized: "unknown"))")
+        case .derParsingFailed: return String(localized: "Could not parse the key")
+        case .invalidKey: return String(localized: "Could not read the key")
+        case let .invalidToken(reason): return String(localized: "Invalid ID Token: \(reason)")
+        case let .keyStore(status): return String(localized: "Keychain unavailable (OSStatus \(Int(status)))")
         }
     }
 }

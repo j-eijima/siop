@@ -1,12 +1,18 @@
 import XCTest
 
 /// Covers how the app handles a Section 7.3 request: the consent screen it
-/// shows, and the response it produces on approval or refusal.
+/// shows, the identities it offers, and the response it produces on approval
+/// or refusal.
 ///
 /// The request is injected through a launch argument rather than opened as a
 /// URL, because `XCUIApplication.open(_:)` delivers the URL on some iOS
 /// versions and merely launches the app on others. That the real `openid:`
 /// route works is the job of `EndToEndRPTests`, which goes through Safari.
+///
+/// Buttons are found by accessibility identifier: the approve button's title
+/// depends on whether this RP has an identity yet, which these tests do not
+/// all control. Everything else is read as text, so the app is launched in
+/// English whatever language the simulator is set to.
 final class AuthenticationFlowUITests: XCTestCase {
     private static let clientID = "https://client.example.org/cb"
 
@@ -16,11 +22,24 @@ final class AuthenticationFlowUITests: XCTestCase {
         super.tearDown()
     }
 
-    private func launch(query: String) -> XCUIApplication {
+    private static let english = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+
+    private func launch(query: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-siopRequestURL", "openid://?\(query)"]
+        app.launchArguments = Self.english
+        if let query {
+            app.launchArguments += ["-siopRequestURL", "openid://?\(query)"]
+        }
         app.launch()
         return app
+    }
+
+    /// A request from an RP no earlier run can have answered, since the
+    /// simulator's Keychain outlives each run.
+    private func launchForFreshRP() -> (XCUIApplication, String) {
+        let clientID = "https://fresh-\(UUID().uuidString.prefix(8).lowercased()).example/cb"
+        let encoded = clientID.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+        return (launch(query: "response_type=id_token&scope=openid&nonce=n1&client_id=\(encoded)"), clientID)
     }
 
     /// `LabeledContent` merges its label and value into one accessibility
@@ -37,16 +56,22 @@ final class AuthenticationFlowUITests: XCTestCase {
     }
 
     func testIdentityScreenShowsSelfIssuedSubject() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launch()
 
-        XCTAssertTrue(text(containing: "RP ごとに別の鍵", in: app).waitForExistence(timeout: 20))
+        XCTAssertTrue(text(containing: "a separate key for one RP", in: app).waitForExistence(timeout: 20))
         attachScreenshot(app, named: "identity")
 
-        // The Discovery section (Section 7.1) sits below the fold.
-        app.swipeUp()
-        XCTAssertTrue(text(containing: "https://self-issued.me", in: app).waitForExistence(timeout: 5))
-        XCTAssertTrue(text(containing: "pairwise", in: app).exists)
+        // The Discovery section (Section 7.1) sits below every identity the
+        // simulator has accumulated, however many that is. A list builds rows
+        // only as they come on screen, so scroll until the row checked last
+        // is there, not merely the section's first.
+        let issuer = text(containing: "https://self-issued.me", in: app)
+        let subjectType = text(containing: "pairwise", in: app)
+        for _ in 0..<30 where !subjectType.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(subjectType.waitForExistence(timeout: 5))
+        XCTAssertTrue(issuer.exists)
     }
 
     func testRequestShowsConsentScreen() {
@@ -56,18 +81,19 @@ final class AuthenticationFlowUITests: XCTestCase {
         XCTAssertTrue(text(containing: "openid", in: app).exists)
         XCTAssertTrue(text(containing: "profile", in: app).exists)
         XCTAssertTrue(text(containing: "n-0S6_WzA2Mj", in: app).exists)
-        XCTAssertTrue(app.buttons["この識別子で応答する"].exists)
-        XCTAssertTrue(app.buttons["拒否する"].exists)
+        XCTAssertTrue(app.staticTexts["af0ifjsldkj"].exists, "state がプレビューに無い")
+        XCTAssertTrue(app.buttons["approve"].exists)
+        XCTAssertTrue(app.buttons["decline"].exists)
         attachScreenshot(app, named: "consent")
     }
 
     func testApprovalIssuesTokenAndReportsSuccess() {
         let app = launch(query: "response_type=id_token&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid&nonce=n1")
 
-        XCTAssertTrue(app.buttons["この識別子で応答する"].waitForExistence(timeout: 20))
-        app.buttons["この識別子で応答する"].tap()
+        XCTAssertTrue(app.buttons["approve"].waitForExistence(timeout: 20))
+        app.buttons["approve"].tap()
 
-        XCTAssertTrue(app.staticTexts["ID Token を返しました"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["ID Token returned"].waitForExistence(timeout: 10))
         // The response must reach the RP in the fragment (Section 3.2.2.5).
         XCTAssertTrue(text(containing: "\(Self.clientID)#id_token=", in: app).exists)
         attachScreenshot(app, named: "approved")
@@ -76,10 +102,10 @@ final class AuthenticationFlowUITests: XCTestCase {
     func testDeclineReportsAccessDenied() {
         let app = launch(query: "response_type=id_token&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid&nonce=n1")
 
-        XCTAssertTrue(app.buttons["拒否する"].waitForExistence(timeout: 20))
-        app.buttons["拒否する"].tap()
+        XCTAssertTrue(app.buttons["decline"].waitForExistence(timeout: 20))
+        app.buttons["decline"].tap()
 
-        XCTAssertTrue(app.staticTexts["リクエストを拒否しました"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Request declined"].waitForExistence(timeout: 10))
         attachScreenshot(app, named: "declined")
     }
 
@@ -88,10 +114,10 @@ final class AuthenticationFlowUITests: XCTestCase {
         // handles. The token is issued but never reaches the RP.
         let app = launch(query: "response_type=id_token&scope=openid&nonce=n1&client_id=com.example.nothing.handles.this%3A%2F%2Fcb")
 
-        XCTAssertTrue(app.buttons["この識別子で応答する"].waitForExistence(timeout: 20))
-        app.buttons["この識別子で応答する"].tap()
+        XCTAssertTrue(app.buttons["approve"].waitForExistence(timeout: 20))
+        app.buttons["approve"].tap()
 
-        XCTAssertTrue(app.staticTexts["応答を渡せませんでした"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["Response not delivered"].waitForExistence(timeout: 20))
     }
 
     /// An OP is opened from whatever the user was already doing, so it has to
@@ -103,7 +129,7 @@ final class AuthenticationFlowUITests: XCTestCase {
 
         XCUIDevice.shared.orientation = .landscapeLeft
 
-        let approve = app.buttons["この識別子で応答する"]
+        let approve = app.buttons["approve"]
         XCTAssertTrue(approve.waitForExistence(timeout: 10), "横向きで同意画面が失われている")
         XCTAssertTrue(approve.isHittable, "横向きで承認ボタンを押せない")
         XCTAssertTrue(app.staticTexts[Self.clientID].exists, "横向きで要求元が読めない")
@@ -114,16 +140,16 @@ final class AuthenticationFlowUITests: XCTestCase {
         add(landscape)
 
         approve.tap()
-        XCTAssertTrue(app.staticTexts["ID Token を返しました"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["ID Token returned"].waitForExistence(timeout: 20))
     }
 
     /// Showing a consent screen must not create a key: the `client_id` comes
     /// from whoever sent the request, so an unanswered stream of them would
     /// otherwise fill the Keychain.
     func testAnUnansweredRequestEstablishesNoIdentifier() {
-        let app = launch(query: "response_type=id_token&scope=openid&nonce=n1&client_id=https%3A%2F%2Ffresh.example%2Fcb")
-        XCTAssertTrue(app.staticTexts["https://fresh.example/cb"].waitForExistence(timeout: 20))
-        XCTAssertTrue(text(containing: "この要求元は初めてです", in: app).exists)
+        let (app, clientID) = launchForFreshRP()
+        XCTAssertTrue(app.staticTexts[clientID].waitForExistence(timeout: 20))
+        XCTAssertTrue(text(containing: "First request from this requester", in: app).exists)
         XCTAssertTrue(subjectShown(in: app).isEmpty, "応答前に識別子を作っている")
     }
 
@@ -138,7 +164,7 @@ final class AuthenticationFlowUITests: XCTestCase {
     }
 
     /// Answers the RP once, then reopens the same request to read the subject
-    /// that is now established for it.
+    /// that is now offered for it.
     ///
     /// It has to be approved, not declined: refusing builds an error response
     /// and never reaches key creation, so a declining version of this would
@@ -147,17 +173,17 @@ final class AuthenticationFlowUITests: XCTestCase {
         let query = "response_type=id_token&scope=openid&nonce=n1&client_id=\(encoded)"
 
         let first = launch(query: query)
-        XCTAssertTrue(first.buttons["この識別子で応答する"].waitForExistence(timeout: 20))
-        first.buttons["この識別子で応答する"].tap()
-        XCTAssertTrue(first.staticTexts["ID Token を返しました"].waitForExistence(timeout: 20))
+        XCTAssertTrue(first.buttons["approve"].waitForExistence(timeout: 20))
+        first.buttons["approve"].tap()
+        XCTAssertTrue(first.staticTexts["ID Token returned"].waitForExistence(timeout: 20))
 
         let again = launch(query: query)
         XCTAssertTrue(again.staticTexts[clientID].waitForExistence(timeout: 20))
         return subjectShown(in: again)
     }
 
-    /// The consent screen shows the subject under its own heading, when one
-    /// has been established. A JWK thumbprint is 43 base64url characters.
+    /// The preview shows the whole subject that will be signed; rows elsewhere
+    /// shorten it. A JWK thumbprint is 43 base64url characters.
     private func subjectShown(in app: XCUIApplication) -> String {
         let thumbprint = app.staticTexts.matching(
             NSPredicate(format: "label MATCHES %@", "[A-Za-z0-9_-]{43}")
@@ -165,12 +191,64 @@ final class AuthenticationFlowUITests: XCTestCase {
         return thumbprint.waitForExistence(timeout: 5) ? thumbprint.label : ""
     }
 
+    /// A second identity for the same RP is a second key, so choosing it
+    /// changes the subject that will be signed.
+    func testAnIdentityCreatedForTheRPIsOfferedAndSignsTheResponse() {
+        let (app, _) = launchForFreshRP()
+        XCTAssertTrue(app.buttons["Create identity"].waitForExistence(timeout: 20))
+        app.buttons["Create identity"].tap()
+
+        let label = app.textFields["identity-label"]
+        XCTAssertTrue(label.waitForExistence(timeout: 10))
+        label.tap()
+        label.typeText("Personal")
+        app.buttons["save-identity"].tap()
+
+        XCTAssertTrue(text(containing: "Personal", in: app).waitForExistence(timeout: 10), "作った識別子が並んでいない")
+        XCTAssertFalse(subjectShown(in: app).isEmpty, "作った識別子の sub がプレビューに無い")
+        attachScreenshot(app, named: "identity-created")
+
+        app.buttons["approve"].tap()
+        XCTAssertTrue(app.staticTexts["ID Token returned"].waitForExistence(timeout: 20))
+    }
+
+    /// Deleting takes the key with it, so it asks first, and says what it
+    /// does not do.
+    func testDeletingAnIdentityAsksFirstAndSaysWhatItLeavesAlone() {
+        let (app, _) = launchForFreshRP()
+        XCTAssertTrue(app.buttons["Create identity"].waitForExistence(timeout: 20))
+        app.buttons["Create identity"].tap()
+        let label = app.textFields["identity-label"]
+        XCTAssertTrue(label.waitForExistence(timeout: 10))
+        label.tap()
+        label.typeText("Doomed")
+        app.buttons["save-identity"].tap()
+
+        let inspect = app.buttons["Details"].firstMatch
+        XCTAssertTrue(inspect.waitForExistence(timeout: 10))
+        inspect.tap()
+        let delete = app.buttons["delete-identity"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 10))
+        delete.tap()
+
+        let confirmation = app.alerts.firstMatch
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 10), "確認せずに削除している")
+        XCTAssertTrue(
+            confirmation.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "does not delete the account the RP holds")).firstMatch.exists,
+            "RP 側のアカウントは消えないことを伝えていない"
+        )
+        attachScreenshot(app, named: "delete-confirmation")
+        confirmation.buttons["Delete identity and key"].tap()
+
+        XCTAssertTrue(text(containing: "First request from this requester", in: app).waitForExistence(timeout: 10), "削除した識別子が残っている")
+    }
+
     func testUnsupportedResponseTypeIsRejected() {
         // Section 7.1: a Self-Issued OP supports only response_type=id_token.
         let app = launch(query: "response_type=code&client_id=https%3A%2F%2Fclient.example.org%2Fcb&scope=openid&nonce=n1")
 
-        XCTAssertTrue(app.staticTexts["処理できませんでした"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.staticTexts["未対応の response_type です: code"].exists)
+        XCTAssertTrue(app.staticTexts["Could not process the request"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["Unsupported response_type: code"].exists)
         attachScreenshot(app, named: "rejected")
     }
 }

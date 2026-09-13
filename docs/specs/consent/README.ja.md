@@ -7,11 +7,12 @@
 
 ## 現状
 
-一部実装済み。両アプリとも `openid:` でリクエストを受け、要求元の `client_id`、要求された
-scope、`response_type`、`nonce`、`state`、そしてその RP に対して確立済みの `sub`
-(無ければ応答時に作る旨)を出す同意画面がある。拒否時の `access_denied` も返している。
-未実装は、署名前に公開鍵を出すこと、[parameters/](../parameters/) が述べるパラメータの
-全体表示、[identity/](../identity/) が述べる識別子の選択。
+iOS で実装済み。同意画面は届いたリクエストをそのまま示し、応答に使う識別子を選ぶか作らせ
+([identity/](../identity/))、公開鍵を含めて署名される値をすべて、それぞれの出どころとともに
+プレビューする([parameters/](../parameters/))。拒否時の `access_denied` は両プラットフォームで
+返している。Android の同意画面は、要求元の `client_id`、要求された scope、`response_type`、
+`nonce`、`state`、そしてその RP に対して確立済みの `sub`(無ければ応答時に作る旨)を出すが、
+公開鍵は出さず、識別子の選択もない。
 
 ## 振る舞い
 

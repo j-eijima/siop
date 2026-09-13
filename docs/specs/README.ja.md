@@ -46,6 +46,6 @@
 
 | 主題 | 対象 | 状態 |
 |---|---|---|
-| [identity/](identity/) | 識別子の作成・一覧・閲覧・編集・削除と、応答に使う識別子の選択 | 要件。現状は RP ごとの鍵を自動で使い、選択させていない |
-| [consent/](consent/) | 署名する前にユーザーが見るもの、拒否したときに何が起きないか | 一部実装済み。同意画面はある |
-| [parameters/](parameters/) | 各パラメータの値と出どころの表示。SIOP 側と RP 側の両方 | 要件。[UI モック](../../rp/public/mock.html)で示している |
+| [identity/](identity/) | 識別子の作成・一覧・閲覧・編集・削除と、応答に使う識別子の選択 | iOS で実装済み。Android は RP ごとの鍵を自動で使い、選択させていない |
+| [consent/](consent/) | 署名する前にユーザーが見るもの、拒否したときに何が起きないか | iOS で実装済み。Android は一部 |
+| [parameters/](parameters/) | 各パラメータの値と出どころの表示。SIOP 側と RP 側の両方 | iOS とテスト RP で実装済み。Android はまだ |

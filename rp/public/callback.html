@@ -1,42 +1,99 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SIOP テスト RP — 検証結果</title>
+<title data-i18n="page.title.result">SIOP test RP — result</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<header class="topbar">
+  <div class="brand"><span class="logo" aria-hidden="true">s</span><div><strong>SIOP</strong><small>TEST RELYING PARTY</small></div></div>
+  <div class="topbar-end">
+    <div class="topnote"><span class="dot"></span><span data-i18n="top.note">Verified entirely in this browser</span></div>
+    <div class="lang-switch" role="group" data-i18n-label="lang.label" aria-label="Language">
+      <button type="button" data-lang="en" lang="en">English</button>
+      <button type="button" data-lang="ja" lang="ja">日本語</button>
+    </div>
+  </div>
+</header>
 <main>
-  <h1>検証結果</h1>
-  <p class="lede">
-    フラグメントで受け取った応答を、Section 7.5 の手順どおりに検証します。
-    ID Token はサーバに送信されず、このページ内で完結します。
-  </p>
-
-  <div class="card" id="summary"></div>
-
-  <h2>送信したリクエスト</h2>
-  <div class="card"><table class="params" id="request"></table></div>
-
-  <h2>受け取った応答</h2>
-  <div class="card"><table class="params" id="response"></table></div>
-
-  <div id="details" hidden>
-    <h2>検証項目</h2>
-    <div class="card"><ul class="checks" id="checks"></ul></div>
-
-    <h2>JOSE ヘッダ</h2>
-    <div class="card"><pre id="header"></pre></div>
-
-    <h2>ID Token のクレーム</h2>
-    <div class="card"><table class="params" id="claims"></table></div>
-
-    <h2>ペイロード全体</h2>
-    <div class="card"><pre id="payload"></pre></div>
+  <div class="intro">
+    <div>
+      <p class="eyebrow" data-i18n="eyebrow.result">RELYING PARTY / RESULT</p>
+      <h1 data-i18n="heading">Match request and response, one value at a time.</h1>
+      <p class="subtitle" data-i18n="subtitle.result">What was sent beside what came back, and the ground for each verdict. The ID Token never reaches a server; it is verified on this page.</p>
+    </div>
+    <span class="badge green">OpenID Connect Core 1.0 · §7.5</span>
+  </div>
+  <div class="flow" data-i18n-label="flow.label" aria-label="Progress of the authentication">
+    <span class="step"><b>1</b><span data-i18n="flow.request">RP requests</span></span><span class="arrow">→</span>
+    <span class="step"><b>2</b><span data-i18n="flow.sign">Identity chosen and signed</span></span><span class="arrow">→</span>
+    <span class="step active"><b>3</b><span data-i18n="flow.check">RP checks</span></span>
   </div>
 
-  <div class="actions"><a class="button" href="index.html">最初に戻る</a></div>
+  <div class="rp-grid result-first">
+    <section class="panel" aria-labelledby="comparison-title">
+      <div id="summary" class="result-summary waiting" role="status">
+        <h2 class="verdict" data-i18n="result.checking">Checking…</h2>
+        <p></p>
+      </div>
+      <div class="panel-head"><h2 id="comparison-title" data-i18n="result.title">Parameters and checks</h2><span class="badge" id="result-count"></span></div>
+      <div class="table-scroll">
+        <table class="comparison">
+          <thead><tr>
+            <th scope="col" data-i18n="result.head.parameter">Parameter / meaning</th>
+            <th scope="col" data-i18n="result.head.expected">Sent / expected</th>
+            <th scope="col" data-i18n="result.head.actual">Received</th>
+            <th scope="col" data-i18n="result.head.verdict">Verdict</th>
+          </tr></thead>
+          <tbody id="comparison-body"></tbody>
+        </table>
+      </div>
+      <details>
+        <summary data-i18n="result.derivation">How the public key becomes sub</summary>
+        <p class="derivation" data-i18n-html="result.derivationSteps"></p>
+        <pre id="thumbprint-raw"></pre>
+      </details>
+      <details>
+        <summary data-i18n="result.token">The ID Token · header / payload / JWT</summary>
+        <pre id="token-raw"></pre>
+        <p class="form-actions"><button type="button" id="copy-token" class="quiet" disabled data-i18n="button.copyJWT">Copy JWT</button></p>
+      </details>
+      <details>
+        <summary data-i18n="result.response">The response URL · fragment</summary>
+        <div class="fields" id="response"></div>
+        <pre id="response-raw"></pre>
+      </details>
+    </section>
+
+    <div class="stack">
+      <section class="panel" aria-labelledby="request-title">
+        <div class="panel-head">
+          <div><h2 id="request-title" data-i18n="sent.title">Request sent</h2><small data-i18n="sent.lede">As this browser kept it</small></div>
+          <span class="badge blue" data-i18n="badge.byRP">Built by the RP</span>
+        </div>
+        <div class="pad"><div class="fields" id="request"></div></div>
+        <div class="actionbar"><a class="button primary" href="index.html" data-i18n="sent.again">Make a new request</a></div>
+      </section>
+      <section class="panel" aria-labelledby="scenario-title">
+        <div class="pad">
+          <h3 id="scenario-title" data-i18n="scenario.title">Watch a check fail</h3>
+          <p class="hint" data-i18n="scenario.hint">The token stays as it came; only what this RP expects is swapped, to see how the verdicts change.</p>
+          <div class="field">
+            <select id="scenario" data-i18n-label="scenario.label" aria-label="Expectations to check against">
+              <option value="normal" data-i18n="scenario.normal">Check against what was kept</option>
+              <option value="nonce" data-i18n="scenario.nonce">Expect a different nonce</option>
+              <option value="state" data-i18n="scenario.state">Expect a different state</option>
+              <option value="aud" data-i18n="scenario.aud">Expect a different RP as aud</option>
+            </select>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer><span data-i18n="footer.static">Test RP · static files only · the ID Token is never sent to a server</span><span data-i18n="footer.crypto">Signatures, thumbprints and checks run on WebCrypto</span></footer>
 </main>
 <script type="module" src="callback.js"></script>
 </body>

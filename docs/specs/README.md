@@ -49,6 +49,6 @@ it. Everything here is a promise about observable behaviour — never a descript
 
 | Subject | Covers | State |
 |---|---|---|
-| [identity/](identity/) | Creating, listing, inspecting, editing, deleting, and choosing an identity | Requirement; the apps use a key per RP without offering a choice |
-| [consent/](consent/) | What the user sees before anything is signed, and what declining means | Partly built; the consent screen exists |
-| [parameters/](parameters/) | Showing each protocol value and where it came from, on both sides | Requirement; demonstrated by the [UI mock](../../rp/public/mock.html) |
+| [identity/](identity/) | Creating, listing, inspecting, editing, deleting, and choosing an identity | Built on iOS; Android uses a key per RP without offering a choice |
+| [consent/](consent/) | What the user sees before anything is signed, and what declining means | Built on iOS; partly on Android |
+| [parameters/](parameters/) | Showing each protocol value and where it came from, on both sides | Built on iOS and in the test RP; not on Android |

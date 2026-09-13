@@ -1,5 +1,7 @@
 # 0003 — One signing key per Relying Party, with no migration
 
+Superseded by [0011](0011-identities-per-rp.md).
+
 ## Context
 
 The static metadata advertises pairwise subjects. An earlier version held a single key for the
