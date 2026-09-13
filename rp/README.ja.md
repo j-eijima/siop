@@ -120,7 +120,8 @@ rp/deploy/gcp/deploy.sh <gcp-project> [region]     # region の既定は asia-no
 ```
 
 Cloud Run は amd64 で動き、Mac は arm64 でビルドするので、イメージは Cloud Build で作り、
-コミットでタグを付ける。スクリプトは最初に Terraform が API を扱うのに使う2つ(Cloud Resource
+コミットでタグを付ける。Cloud Run にはタグではなくイメージのダイジェストを渡すので、同じタグに
+上書きしてもビルドのたびに必ず新しい版が出る。スクリプトは最初に Terraform が API を扱うのに使う2つ(Cloud Resource
 Manager と Service Usage)を有効にし、イメージの置き場を作るために一度 apply し、ビルドして、
 もう一度 apply する。RP の URL は `deploy/gcp/` で `terraform output url` を実行すると出る。
 

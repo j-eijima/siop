@@ -12,5 +12,5 @@ project = "your-gcp-project"
 region = "asia-northeast1"
 
 # The image to run. It has to exist already: deploy.sh builds it, tagged with
-# the commit, as <region>-docker.pkg.dev/<project>/siop/rp:<commit>.
-image = "asia-northeast1-docker.pkg.dev/your-gcp-project/siop/rp:0123abc"
+# the commit, and records it by digest so that a rebuild always rolls out.
+image = "asia-northeast1-docker.pkg.dev/your-gcp-project/siop/rp@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

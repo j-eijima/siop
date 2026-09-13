@@ -30,9 +30,14 @@ window.addEventListener("hashchange", () => location.reload());
 
 const pending = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
 
-// One-shot: the nonce must not be reusable for a later response. The values
-// stay in this page, so the response can still be re-checked below.
-if (pending && fragment.has("id_token")) localStorage.removeItem(STORAGE_KEY);
+// One-shot: the nonce must not be reusable for a later response. It is spent
+// only by the response that answers it — the one carrying the state it was
+// sent with — so a stale tab or an unsolicited link cannot throw away a request
+// whose real response is still on its way. The values stay in this page, so
+// the response can still be re-checked below.
+if (pending && fragment.has("id_token") && checkState(pending.state ?? "", fragment.get("state")).ok) {
+  localStorage.removeItem(STORAGE_KEY);
+}
 
 /// What this RP expects, as it sent it. Null throughout when this browser has
 /// no record of the request, which fails those comparisons rather than

@@ -126,7 +126,8 @@ rp/deploy/gcp/deploy.sh <gcp-project> [region]     # region defaults to asia-nor
 ```
 
 The image is built by Cloud Build, since Cloud Run runs amd64 and a Mac builds arm64, and is tagged
-with the commit. The script first enables the two APIs Terraform works through (Cloud Resource
+with the commit. Cloud Run is given the image's digest rather than the tag, so every build rolls
+out even when a tag is pushed again. The script first enables the two APIs Terraform works through (Cloud Resource
 Manager and Service Usage), then applies once to create the registry, builds, and applies again.
 `terraform output url` in `deploy/gcp/` prints where the RP is.
 
