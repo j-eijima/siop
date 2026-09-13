@@ -14,8 +14,15 @@ import jp.co.pendako.siop.SiopIdentityStore
  * Drives one authentication request from arrival through consent to the
  * response handed back to the RP (OpenID Connect Core 1.0 Sections 7.3-7.4),
  * and keeps the identities the user answers as.
+ *
+ * @param onPendingChange told the URL of the request awaiting the user's
+ *   answer whenever that changes, and null once it is answered or dropped, so
+ *   that it can be kept for when the app's process is ended while it waits.
  */
-class AuthenticationSession(private val store: SiopIdentityStore) {
+class AuthenticationSession(
+    private val store: SiopIdentityStore,
+    private val onPendingChange: (String?) -> Unit = {},
+) {
 
     sealed interface Phase {
         data object Idle : Phase
@@ -46,6 +53,12 @@ class AuthenticationSession(private val store: SiopIdentityStore) {
 
     init {
         refresh()
+    }
+
+    /** Moves on, telling [onPendingChange] whether a request is left waiting. */
+    private fun enter(next: Phase, requestUrl: String? = null) {
+        phase = next
+        onPendingChange(if (next is Phase.Consent) requestUrl else null)
     }
 
     // Identities
@@ -114,7 +127,7 @@ class AuthenticationSession(private val store: SiopIdentityStore) {
         val request = try {
             AuthorizationRequest.parse(url)
         } catch (cause: Exception) {
-            phase = Phase.Failed(Failure.of(cause))
+            enter(Phase.Failed(Failure.of(cause)))
             return
         }
         try {
@@ -127,10 +140,10 @@ class AuthenticationSession(private val store: SiopIdentityStore) {
             // Fail closed. Carrying on would show an RP this device has
             // answered as a new one, and answering it would make a new key —
             // a different subject, and to the RP a different person.
-            phase = Phase.Failed(Failure.CouldNotLoad(Failure.of(cause)))
+            enter(Phase.Failed(Failure.CouldNotLoad(Failure.of(cause))))
             return
         }
-        phase = Phase.Consent(request)
+        enter(Phase.Consent(request), url)
     }
 
     /**
@@ -142,47 +155,53 @@ class AuthenticationSession(private val store: SiopIdentityStore) {
     fun approve(request: AuthorizationRequest, identity: SiopIdentity?, deliver: (String) -> Boolean) {
         if (identity != null && identity.clientId != request.clientId) {
             // Two RPs answered by one identity would be handed one subject.
-            phase = Phase.Failed(Failure.AnswersOnly(identity.clientId))
+            enter(Phase.Failed(Failure.AnswersOnly(identity.clientId)))
             return
         }
         if (identity == null && identitiesFor(request.clientId).isNotEmpty()) {
             // A new identity is made only for an RP that has none. One whose
             // identity exists but cannot sign right now gets no stand-in:
             // that would answer as someone else.
-            phase = Phase.Failed(Failure.NoStandIn)
+            enter(Phase.Failed(Failure.NoStandIn))
             return
         }
         val redirectUrl = try {
+            // The record is durable before the response is built, so the
+            // subject an RP is about to learn is never one this device forgets.
             val signer = identity?.let(::current) ?: store.createIdentity(request.clientId)
             val response = SelfIssuedOp.respond(request, store.keyProvider(signer))
             runCatching { store.markUsed(signer) }
             refresh()
             response.redirectUrl
         } catch (cause: Exception) {
-            phase = Phase.Failed(Failure.of(cause))
+            enter(Phase.Failed(Failure.of(cause)))
             return
         }
         // Section 7.2 lets client_id name any scheme, including one no
         // installed app handles, so failing to reach the RP is an outcome to
         // report, not an impossible one.
-        phase = if (deliver(redirectUrl)) {
-            Phase.Sent(request.clientId, redirectUrl)
-        } else {
-            Phase.Undeliverable(request.clientId, redirectUrl)
-        }
+        enter(
+            if (deliver(redirectUrl)) {
+                Phase.Sent(request.clientId, redirectUrl)
+            } else {
+                Phase.Undeliverable(request.clientId, redirectUrl)
+            }
+        )
     }
 
     /** Section 3.1.2.6: tell the RP the user declined rather than leaving it waiting. */
     fun decline(request: AuthorizationRequest, deliver: (String) -> Boolean) {
         val redirectUrl = AuthenticationErrorResponse(request).redirectUrl
-        phase = if (deliver(redirectUrl)) {
-            Phase.Declined(request.clientId)
-        } else {
-            Phase.Undeliverable(request.clientId, redirectUrl)
-        }
+        enter(
+            if (deliver(redirectUrl)) {
+                Phase.Declined(request.clientId)
+            } else {
+                Phase.Undeliverable(request.clientId, redirectUrl)
+            }
+        )
     }
 
     fun reset() {
-        phase = Phase.Idle
+        enter(Phase.Idle)
     }
 }

@@ -13,6 +13,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.net.toUri
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import java.io.File
 import jp.co.pendako.siop.SiopIdentityStore
 
@@ -31,8 +32,10 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // An activity recreated — turned to landscape, say — has handled its
-        // request already, and the session kept it.
+        // An activity recreated — turned to landscape, or brought back after
+        // its process was ended — has handled its request already. Handling
+        // it again could offer a request the user has answered; one still
+        // waiting is kept by the model, or restored from its saved state.
         if (savedInstanceState == null) handle(intent)
     }
 
@@ -73,16 +76,31 @@ class MainActivity : ComponentActivity() {
 /**
  * Holds the session across configuration changes, so turning the device
  * mid-consent keeps the request on screen.
+ *
+ * Android can also end the process while a request waits for the user — the
+ * user switched away to check who is asking, say. The model does not survive
+ * that, but its saved state does: the request waiting is kept there until it
+ * is answered, and a new model takes it up again, so the RP is not left
+ * waiting for an answer that will never come.
  */
-class SessionModel(application: Application) : AndroidViewModel(application) {
+class SessionModel(application: Application, savedState: SavedStateHandle) : AndroidViewModel(application) {
     val session = AuthenticationSession(
-        SiopIdentityStore(
+        store = SiopIdentityStore(
             records = FileIdentityRecords(File(application.noBackupFilesDir, "identities")),
             keys = AndroidKeystoreIdentityKeys(),
             aliasPrefix = KEY_ALIAS_PREFIX,
             adoptsPerRpKeys = true,
-        )
+        ),
+        onPendingChange = { savedState[PENDING_REQUEST] = it },
     )
+
+    init {
+        savedState.get<String>(PENDING_REQUEST)?.let(session::receive)
+    }
+
+    companion object {
+        const val PENDING_REQUEST = "pending-request"
+    }
 }
 
 /**

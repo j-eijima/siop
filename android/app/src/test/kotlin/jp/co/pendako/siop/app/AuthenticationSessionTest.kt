@@ -242,6 +242,32 @@ class AuthenticationSessionTest {
         assertNull(session.subjectOf(identity))
     }
 
+    // What is kept for when the process is ended
+
+    /**
+     * A request waiting for the user is reported, so it can be kept past the
+     * process being ended, and dropped once answered, so an answered request
+     * is never offered again.
+     */
+    @Test
+    fun theRequestWaitingForAnAnswerIsReportedUntilItIsAnswered() {
+        val kept = mutableListOf<String?>()
+        val session = AuthenticationSession(SiopIdentityStore.ephemeral()) { kept += it }
+
+        val request = consent(session)
+        assertEquals(requestUrl(), kept.last())
+
+        session.approve(request, null, Deliveries()::deliver)
+        assertNull("応答済みのリクエストを残している", kept.last())
+
+        session.receive(requestUrl(nonce = "n2"))
+        session.reset()
+        assertNull("閉じたリクエストを残している", kept.last())
+
+        session.receive("openid://?response_type=code&client_id=https%3A%2F%2Fc.example%2Fcb&scope=openid&nonce=n1")
+        assertNull("処理できなかったリクエストを残している", kept.last())
+    }
+
     // Delivery
 
     /** Section 7.2 lets client_id name a scheme no app handles; the token is issued but never arrives. */

@@ -107,7 +107,11 @@ Keys live in the Android Keystore (`AndroidKeystoreIdentityKeys`), so a `sub` is
 launch and the private key never leaves the keystore. The records beside them — names, RP, when
 each last answered — are JSON files where nothing is backed up (`FileIdentityRecords`): a key
 cannot leave the keystore, so a record restored alone would list an identity that can never
-answer. Both go when the app is removed.
+answer. Both go when the app is removed. A record is synced to storage before a response signed by
+its identity leaves the app, so the subject an RP learns is never one the device forgets.
+
+A request waiting for the user is kept in the activity's saved state until it is answered, so it
+comes back if Android ends the app's process meanwhile; one already answered does not.
 
 If the identities cannot be read, a request stops with a message instead of reaching the consent
 screen, and an RP whose identity exists but cannot sign is not answered as a new one unless the

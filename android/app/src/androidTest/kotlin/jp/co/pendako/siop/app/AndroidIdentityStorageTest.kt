@@ -84,6 +84,15 @@ class AndroidIdentityStorageTest {
         assertEquals("二度目にも引き継いでいる", 1, store(adopts = true).identitiesFor(clientId).size)
     }
 
+    /** All a crash in the middle of a save can leave is the partial file, which is never read. */
+    @Test
+    fun aSaveCutShortLeavesTheRecordsReadable() {
+        val identity = store().createIdentity(clientId, "Kept", "")
+        File(directory, "${identity.id}.json.partial").writeText("{ half a rec")
+
+        assertEquals(listOf(identity), store().allIdentities())
+    }
+
     @Test
     fun aRecordThatDoesNotDecodeStopsEverything() {
         store().createIdentity(clientId, "Readable", "")
