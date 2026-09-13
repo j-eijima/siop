@@ -70,6 +70,26 @@ describe("待っているリクエストの受け入れ", () => {
     assert.equal(storage.getItem(KEY), recorded("n2"));
   });
 
+  // A request page left open used to write the record back after its
+  // response was accepted. The callback reopened then found it again.
+  it("受け入れた後に控えが書き戻されても、同じ nonce は二度と受け入れない", async () => {
+    const storage = withRecord("n1");
+    const locks = new Locks();
+    assert.equal(await pendingRequest(storage, KEY, locks).accept(), true);
+
+    storage.setItem(KEY, recorded("n1"));
+    assert.equal(await pendingRequest(storage, KEY, locks).accept(), false);
+  });
+
+  it("別の nonce の新しいリクエストは、その後も受け入れる", async () => {
+    const storage = withRecord("n1");
+    const locks = new Locks();
+    assert.equal(await pendingRequest(storage, KEY, locks).accept(), true);
+
+    storage.setItem(KEY, recorded("n2"));
+    assert.equal(await pendingRequest(storage, KEY, locks).accept(), true);
+  });
+
   // With no way to make the claim exclusive, accepting would risk two tabs
   // both succeeding. Nothing is accepted, and the record is left alone.
   it("ロックが使えなければ受け入れず、記録にも触らない", async () => {

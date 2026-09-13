@@ -103,7 +103,10 @@ function renderFields() {
   })));
 }
 
-function refresh() {
+/// Redraws what depends on the values. `record` is false for a redraw that
+/// changes no value — a switch of language — since writing the record then
+/// could bring back a request whose response has already been accepted.
+function refresh({ record = true } = {}) {
   const requestURL = buildRequestURL();
   requestURLBlock.textContent = requestURL.replace(/&/g, "\n&");
   startLink.href = requestURL;
@@ -123,7 +126,7 @@ function refresh() {
     audience: valueOf("client_id"),
     requestURL,
   };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(expected));
+  if (record) localStorage.setItem(STORAGE_KEY, JSON.stringify(expected));
   renderParams(expectationsBox, [
     { name: "aud", value: expected.audience, why: t("expect.aud") },
     { name: "nonce", value: expected.nonce, why: t("expect.nonce") },
@@ -171,5 +174,19 @@ document.getElementById("copy").addEventListener("click", async (event) => {
   setTimeout(() => { button.textContent = t("button.copyURL"); }, 1500);
 });
 
-onLanguageChange(render);
+// When the result page in another tab accepts a response, it removes the
+// record. Prepare the next request with a fresh nonce and state, so this page
+// never offers one that has already been used.
+window.addEventListener("storage", (event) => {
+  if (event.key !== STORAGE_KEY || event.newValue !== null) return;
+  for (const parameter of parameters) {
+    if (parameter.name === "nonce" || parameter.name === "state") parameter.value = randomToken();
+  }
+  render();
+});
+
+onLanguageChange(() => {
+  renderFields();
+  refresh({ record: false });
+});
 render();

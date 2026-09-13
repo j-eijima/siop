@@ -53,6 +53,8 @@ a malformed request is the point, so `response_type=code` or a missing nonce can
 Each parameter carries the section number it comes from. The ones the response will be checked
 against — `client_id`, `nonce`, `state` — are marked, and listed again as the values the RP keeps
 for the comparison. The response side lists the received fragment parameters in the same form.
+Once a response has been accepted in another tab, the request page prepares a fresh nonce and state
+for the next request, and the result page never accepts the same nonce twice.
 
 ### Watching a check fail
 
@@ -94,7 +96,8 @@ Node is all that is needed; there are no dependencies.
 - `test/state.test.mjs` — the `state` comparison, which happens outside the token
 - `test/pending.test.mjs` — one response, and only one, is accepted for a request, even when two
   tabs claim it at once: finding the record and removing it run under a Web Lock every tab of the
-  origin shares, and a browser without Web Locks accepts nothing
+  origin shares, and a browser without Web Locks accepts nothing. A nonce accepted once is never
+  accepted again, even if its record is written back
 - `test/request.test.mjs` — the spec's rules on the request itself. Section 3.2.2.1 allows an
   http `redirect_uri` only to a native app, and only on the three hosts it names — `localhost`,
   `127.0.0.1`, `[::1]`. This RP is a web page, so it reports even its own default
