@@ -54,7 +54,9 @@ Each parameter carries the section number it comes from. The ones the response w
 against — `client_id`, `nonce`, `state` — are marked, and listed again as the values the RP keeps
 for the comparison. The response side lists the received fragment parameters in the same form.
 Once a response has been accepted in another tab, the request page prepares a fresh nonce and state
-for the next request, and the result page never accepts the same nonce twice.
+for the next request, and the result page never accepts the same nonce twice. The result page judges
+a response once, as it loads; switching language or scenario only redraws. The rule in full, and
+why it holds in the browser, is [decision 0015](../docs/decisions/0015-rp-accepts-one-response-per-request.md).
 
 ### Watching a check fail
 
@@ -100,6 +102,13 @@ Node is all that is needed; there are no dependencies.
   origin shares, and a browser without Web Locks accepts nothing. A nonce accepted once is not
   accepted again while its token is still valid, however many others follow and even if its record
   is written back
+- `test/callback.test.mjs` — the result page itself, run with stand-ins for the DOM, storage and
+  locks. It judges once: a switch of language or scenario while verification or the lock is still
+  pending never loses the claim, never shows success for a changed expectation, and never claims
+  for one; a new fragment reloads the page without claiming for the old response
+- `test/app.test.mjs` — the request page writes its record only when a value changes, so a switch
+  of language cannot bring back a spent request, and a late notice that another tab removed it
+  cannot overwrite a newer one
 - `test/request.test.mjs` — the spec's rules on the request itself. Section 3.2.2.1 allows an
   http `redirect_uri` only to a native app, and only on the three hosts it names — `localhost`,
   `127.0.0.1`, `[::1]`. This RP is a web page, so it reports even its own default

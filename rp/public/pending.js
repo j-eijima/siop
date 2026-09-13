@@ -76,11 +76,12 @@ export function pendingRequest(storage, key, locks) {
     /// accepts nothing; nor is anything accepted without an expiry to keep its
     /// nonce until.
     ///
-    /// Calls that overlap on one page — a redraw while the first still waits
-    /// for the lock — share the first one's claim, and once true the answer
-    /// stays true: a page claims once, and never loses a claim to its own
-    /// redraw. `isCurrent` is asked again once the lock is taken, since what
-    /// the page expects can change while it waits; false then claims nothing.
+    /// Calls that overlap on one page share the first one's claim, and once
+    /// true the answer stays true: a page claims at most once, and never
+    /// loses its claim. The result page asks once anyway, as it loads
+    /// (docs/decisions/0015). `isCurrent` is asked again once the lock is
+    /// taken, since the page can be on its way out while it waits; false then
+    /// claims nothing.
     /// When the answer is false, `failure` says why, if it is known.
     async accept({ expiresAt, now, isCurrent = () => true } = {}) {
       if (accepted) return true;

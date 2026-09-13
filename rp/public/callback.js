@@ -33,15 +33,13 @@ const responseURL = location.href;
 let leaving = false;
 window.addEventListener("hashchange", () => {
   leaving = true;
-  ++evaluation;
   location.reload();
 });
 
 // One-shot: the request is claimed only by a response that passes every check
 // against it, so a stale tab or an unsolicited link, with a state or without,
 // cannot use it up; and only one response is accepted, so a second tab
-// replaying the first is turned away. The values stay in this page, so the
-// response can still be re-checked below.
+// replaying the first is turned away (docs/decisions/0015).
 // Access localStorage inside the storage operations: even its getter may
 // throw when browser storage is disabled.
 const request = pendingRequest({
@@ -69,7 +67,7 @@ const SCENARIOS = {
 
 const scenario = $("scenario");
 scenario.disabled = !pending || !fragment.has("id_token");
-scenario.addEventListener("change", () => evaluate());
+scenario.addEventListener("change", () => draw());
 
 $("copy-token").addEventListener("click", async (event) => {
   const button = event.currentTarget;
@@ -138,99 +136,116 @@ function renderExchange() {
   $("response-raw").textContent = location.href;
 }
 
-/// Bumped by every evaluation, so one that finishes after a newer one has
-/// started — the scenario or the language changed while it waited — draws
-/// nothing.
-let evaluation = 0;
+/// What came back, before any check. A response that repeats a parameter
+/// could be read more than one way, so it is not read at all.
+function responseKind() {
+  if (["id_token", "state", "error"].some((key) => fragment.getAll(key).length > 1)) return "ambiguous";
+  if (fragment.has("error")) return "error";
+  return fragment.has("id_token") ? "token" : "none";
+}
+const kind = responseKind();
 
-/// The response checked against the request as recorded — the only check a
-/// claim can follow. Made once, so every redraw judges the same result, and a
-/// claim is never contradicted by a later check on the same page: of exp, say,
-/// once the token has aged past it.
-let verifiedAsSent = null;
+/// The token checked against `expected`, with state — which travels outside
+/// the token — checked beside it, so a mismatch there hides no other check.
+async function check(expected) {
+  const result = await verifySelfIssuedIDToken(fragment.get("id_token"),
+    { audience: expected.audience, nonce: expected.nonce });
+  const checks = [...result.checks, checkState(expected.state, fragment.get("state"))]
+    .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
+  return { result, checks, failed: checks.filter((entry) => !entry.ok) };
+}
 
-function evaluate() {
-  const run = ++evaluation;
-  return evaluateResponse(run).catch(() => {
-    if (run !== evaluation || leaving) return;
+/// The page's judgement of the response, made once as the page loads: checked
+/// against the request as recorded and, if every check passes, claimed. It is
+/// the only place anything is claimed; a switch of language or of scenario
+/// only redraws from it, so no redraw can race the claim, lose it, or
+/// contradict it (docs/decisions/0015). `outcome` names the verdict.
+async function judge() {
+  const judged = await check(recorded);
+  if (!pending) {
+    // Most often this means the response landed in a different browser: iOS
+    // sends an https URL to the *default* browser, and the OP has no way to
+    // return to the specific browser that started the request. nonce and
+    // state live in that browser's storage, so the check fails closed.
+    return { ...judged, outcome: request.failure ?? "noRecord" };
+  }
+  if (judged.failed.length > 0) return { ...judged, outcome: "failed" };
+  const accepted = await request.accept({
+    expiresAt: judged.result.payload.exp,
+    // A new response arriving while this waits for the lock makes it stale.
+    isCurrent: () => !leaving && location.href === responseURL,
+  });
+  return { ...judged, outcome: accepted ? "ok" : request.failure ?? "unavailable" };
+}
+const judgement = kind === "token" ? judge() : null;
+
+/// Bumped by every draw, so one that finishes after a newer one has started —
+/// the scenario or the language changed while it waited — draws nothing.
+let drawing = 0;
+
+function draw() {
+  const run = ++drawing;
+  return drawResponse(run).catch(() => {
+    if (run !== drawing || leaving) return;
     setVerdict("ng", t("verdict.unavailable"), t("verdict.unavailableDetail"));
   });
 }
 
-async function evaluateResponse(run) {
-  // Read once: the expectations checked and the decision made from them have
-  // to be the same ones.
+async function drawResponse(run) {
   const chosen = scenario.value;
-  const expected = (SCENARIOS[chosen] ?? SCENARIOS.normal)(recorded);
   const body = $("comparison-body");
   $("thumbprint-raw").textContent = t("result.noToken");
   $("token-raw").textContent = t("result.noToken");
 
-  if (["id_token", "state", "error"].some((key) => fragment.getAll(key).length > 1)) {
+  if (kind === "ambiguous") {
     setVerdict("ng", t("verdict.ambiguous"), t("verdict.ambiguousDetail"));
     body.replaceChildren();
     $("result-count").textContent = t("count.notReceived");
     return;
   }
 
-  if (fragment.has("error")) {
+  if (kind === "error") {
     // Section 3.1.2.6: the OP reports a refusal as an error response.
     setVerdict("ng", t("verdict.error"),
       `${fragment.get("error")} · ${fragment.get("error_description") ?? t("verdict.refused")}`);
     body.replaceChildren(
       row({ id: "error", expected: "id_token", actual: fragment.get("error"), ok: false }),
-      row(checkState(expected.state, fragment.get("state"))),
+      row(checkState(recorded.state, fragment.get("state"))),
     );
     $("result-count").textContent = t("count.noToken");
     return;
   }
 
-  if (!fragment.has("id_token")) {
+  if (kind === "none") {
     setVerdict("ng", t("verdict.noResponse"), t("verdict.noResponseDetail"));
     body.replaceChildren();
     $("result-count").textContent = t("count.notReceived");
     return;
   }
 
-  const idToken = fragment.get("id_token");
-  const verify = () => verifySelfIssuedIDToken(idToken, { audience: expected.audience, nonce: expected.nonce });
-  const result = await (chosen === "normal" ? (verifiedAsSent ??= verify()) : verify());
-  if (run !== evaluation || leaving) return;
-  // state travels outside the token, so it is checked apart from it — and a
-  // mismatch no longer hides every other check.
-  const checks = [...result.checks, checkState(expected.state, fragment.get("state"))]
-    .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
-  const failed = checks.filter((check) => !check.ok);
+  const judged = await judgement;
+  // Watching a check fail: the token checked again against an expectation
+  // changed on this page. That is never an authentication, and it cannot
+  // claim anything — only judge() does.
+  const shown = chosen === "normal" ? judged : await check((SCENARIOS[chosen] ?? SCENARIOS.normal)(recorded));
+  if (run !== drawing || leaving) return;
+  const { result, checks, failed } = shown;
 
   let verdict;
-  if (!pending) {
-    // Most often this means the response landed in a different browser: iOS
-    // sends an https URL to the *default* browser, and the OP has no way to
-    // return to the specific browser that started the request. nonce and
-    // state live in that browser's storage, so the check fails closed.
-    const reason = request.failure ?? "noRecord";
-    verdict = ["ng", t(`verdict.${reason}`), t(`verdict.${reason}Detail`)];
-  } else if (failed.length > 0) {
-    verdict = ["ng", t("verdict.failed"), t("verdict.failedDetail", { ids: failed.map((check) => check.id).join(" / ") })];
+  if (failed.length > 0 && (chosen !== "normal" || judged.outcome === "failed")) {
+    verdict = ["ng", t("verdict.failed"), t("verdict.failedDetail", { ids: failed.map((entry) => entry.id).join(" / ") })];
   } else if (chosen !== "normal") {
     // Every check passes, but against an expectation changed on this page, not
-    // the one this RP sent. That is a way to watch the checks, never an
-    // authentication, and it claims nothing.
+    // the one this RP sent.
     verdict = ["ng", t("verdict.simulated"), t("verdict.simulatedDetail")];
-  } else if (await request.accept({
-    expiresAt: result.payload.exp,
-    isCurrent: () => !leaving && scenario.value === "normal" && location.href === responseURL,
-  })) {
+  } else if (judged.outcome === "ok") {
     // EndToEndRPTests waits for the English title, verdict.ok in i18n.js —
     // Safari hands XCUITest no DOM ids — so change the two together.
     verdict = ["ok", t("verdict.ok"), t("verdict.okDetail", { sub: result.payload.sub })];
   } else {
-    const reason = request.failure ?? "unavailable";
-    verdict = ["ng", t(`verdict.${reason}`), t(`verdict.${reason}Detail`)];
+    verdict = ["ng", t(`verdict.${judged.outcome}`), t(`verdict.${judged.outcome}Detail`)];
   }
 
-  // A newer evaluation started while this one waited; that one draws.
-  if (run !== evaluation) return;
   console.info("[SIOP RP] checks", checks);
   setVerdict(...verdict);
 
@@ -250,7 +265,7 @@ async function evaluateResponse(run) {
     $("token-raw").textContent = [
       "JOSE header", JSON.stringify(result.header, null, 2),
       "", "Payload", JSON.stringify(result.payload, null, 2),
-      "", "JWT", idToken,
+      "", "JWT", fragment.get("id_token"),
     ].join("\n");
     $("copy-token").disabled = false;
   }
@@ -258,7 +273,7 @@ async function evaluateResponse(run) {
 
 onLanguageChange(() => {
   renderExchange();
-  evaluate();
+  draw();
 });
 renderExchange();
-await evaluate();
+await draw();

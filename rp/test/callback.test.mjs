@@ -1,7 +1,8 @@
-// The result page's evaluations overlap: a switch of language or of scenario
-// starts a new one while the last still waits on verification or on the lock.
-// The page is run as it is, with stand-ins for the DOM, storage and locks, so
-// the overlaps can be played out one step at a time.
+// The result page judges a response once, as it loads, and only redraws after
+// that (docs/decisions/0015). A switch of language or of scenario can still
+// come while the judgement waits on verification or on the lock. The page is
+// run as it is, with stand-ins for the DOM, storage and locks, so those
+// overlaps can be played out one step at a time.
 
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -21,9 +22,16 @@ const deferred = () => {
 };
 const tick = () => new Promise((done) => setImmediate(done));
 
+/// What the verifier returns: the nonce check passing or failing, and a token
+/// valid for another ten minutes.
+const verified = (ok) => ({
+  checks: [{ id: "nonce", ok, expected: "n", actual: "n" }],
+  payload: { exp: Date.now() / 1000 + 600, sub: "subject" },
+});
+
 /// Opens the result page on `hash`. Verification and the lock are each held
-/// until the test resolves them.
-async function page({ hash = "#id_token=token&state=s", noRecord = false } = {}) {
+/// until the test resolves them, unless `verify` answers for the verifier.
+async function page({ hash = "#id_token=token&state=s", noRecord = false, verify } = {}) {
   const nodes = new Map();
   function node() {
     return { value: "normal", textContent: "", listeners: {},
@@ -44,20 +52,22 @@ async function page({ hash = "#id_token=token&state=s", noRecord = false } = {})
   const verification = deferred();
   const lock = deferred();
   const locks = { request: async (_name, fn) => { await lock.promise; return fn(); } };
-  const result = { checks: [{ id: "nonce", ok: true, expected: "n", actual: "n" }], payload: { exp: Date.now() / 1000 + 600, sub: "subject" } };
+  const result = verified(true);
   const run = new (Object.getPrototypeOf(async function () {}).constructor)(
     "onLanguageChange", "t", "renderParams", "pendingRequest", "canonicalJWK", "checkState", "verifySelfIssuedIDToken",
     "document", "window", "location", "localStorage", "navigator", "console", source)(
     (fn) => { language = fn; }, (key) => key, () => {}, pendingRequest, () => "",
     () => ({ id: "state", ok: true, expected: "s", actual: "s" }),
-    () => { verifications++; return verification.promise; },
+    (...args) => { verifications++; return verify ? verify(...args) : verification.promise; },
     { getElementById: get, createElement: node }, { addEventListener: (key, fn) => { events[key] = fn; } },
     location, storage, { locks }, { info() {} });
-  return { get, events, language: () => language(), run, verification, lock, result, items, location,
+  const choose = (value) => { get("scenario").value = value; get("scenario").listeners.change(); };
+  return { get, events, language: () => language(), choose, run, verification, lock, result, items, location,
+    verdict: () => get(".verdict").textContent,
     reloaded: () => reloaded, verifications: () => verifications };
 }
 
-describe("結果ページの評価が重なるとき", () => {
+describe("結果ページは一度だけ判定し、あとは描き直すだけ", () => {
   it("検証中やロック待ちに言語を切り替えても、受け入れた結果を示し続ける", async () => {
     const p = await page();
     p.language();
@@ -68,31 +78,42 @@ describe("結果ページの評価が重なるとき", () => {
     p.lock.resolve();
     await p.run;
     await tick();
-    assert.equal(p.get(".verdict").textContent, "verdict.ok");
-    // A redraw shows what was claimed; it does not check the token afresh.
+    assert.equal(p.verdict(), "verdict.ok");
+    // A redraw shows what was judged; it does not check the token afresh.
     p.language();
     await tick();
-    assert.equal(p.get(".verdict").textContent, "verdict.ok");
+    assert.equal(p.verdict(), "verdict.ok");
     assert.equal(p.verifications(), 1);
   });
 
-  it("検証中やロック待ちに期待値を差し替えても、リクエストを消費しない", async () => {
-    for (const stage of ["verification", "lock"]) {
-      const p = await page();
-      if (stage === "lock") { p.verification.resolve(p.result); await tick(); }
-      p.get("scenario").value = "nonce";
-      p.get("scenario").listeners.change();
-      p.verification.resolve(p.result);
-      p.lock.resolve();
-      await p.run;
-      await tick();
-      assert.equal(p.get(".verdict").textContent, "verdict.simulated");
-      assert.equal(p.items.has(KEY), true);
-      p.get("scenario").value = "normal";
-      p.get("scenario").listeners.change();
-      await tick();
-      assert.equal(p.get(".verdict").textContent, "verdict.ok");
-    }
+  // The review's bypass: a token whose nonce is the recorded one plus
+  // "-changed" fails the real check and passes the changed one.
+  it("記録どおりの照合に失敗した応答は、期待値を差し替えて通っても受け入れない", async () => {
+    const p = await page({ verify: (_token, { nonce }) => Promise.resolve(verified(nonce === "n-changed")) });
+    p.lock.resolve();
+    await p.run;
+    await tick();
+    assert.equal(p.verdict(), "verdict.failed");
+    p.choose("nonce");
+    await tick();
+    assert.equal(p.verdict(), "verdict.simulated");
+    assert.equal(p.items.has(KEY), true);
+    assert.equal(p.items.has(SPENT), false);
+  });
+
+  it("受け入れ待ちの間に期待値を差し替えても成功とは示さず、記録どおりの照合による受け入れは変わらない", async () => {
+    const p = await page();
+    p.verification.resolve(p.result);
+    await tick();
+    p.choose("nonce");
+    p.lock.resolve();
+    await p.run;
+    await tick();
+    assert.equal(p.verdict(), "verdict.simulated");
+    assert.equal(p.items.has(KEY), false);
+    p.choose("normal");
+    await tick();
+    assert.equal(p.verdict(), "verdict.ok");
   });
 
   // Safari hands a new response to the tab already showing one: the page
@@ -122,7 +143,7 @@ describe("結果ページの評価が重なるとき", () => {
       p.lock.resolve();
       await p.run;
       await tick();
-      assert.equal(p.get(".verdict").textContent, options.noRecord ? "verdict.noRecord" : "verdict.failed");
+      assert.equal(p.verdict(), options.noRecord ? "verdict.noRecord" : "verdict.failed");
       assert.equal(p.items.has(SPENT), false);
       assert.equal(p.items.has(KEY), !options.noRecord);
     }
@@ -131,7 +152,7 @@ describe("結果ページの評価が重なるとき", () => {
   it("応答パラメータが重複していれば、検証する前に止まる", async () => {
     const p = await page({ hash: "#id_token=token&state=s&state=other" });
     await p.run;
-    assert.equal(p.get(".verdict").textContent, "verdict.ambiguous");
+    assert.equal(p.verdict(), "verdict.ambiguous");
     assert.equal(p.items.has(KEY), true);
     assert.equal(p.verifications(), 0);
   });
