@@ -14,3 +14,9 @@ ios/SIOPApp/Info.plist
 .gradle/
 build/
 .tls/
+# Terraform: providers, and state that holds this deployment's details. The
+# lock file is committed, so every apply uses the same provider versions.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars

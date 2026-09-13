@@ -114,6 +114,28 @@ gcloud run deploy siop-rp --source rp --allow-unauthenticated
 A hosted RP is the practical way to exercise a phone or tablet, since the certificate is then one
 the device already trusts.
 
+### With Terraform
+
+`deploy/gcp/` describes the same deployment in Terraform — the Cloud Run service, the registry its
+images go to, and the APIs they need — so that what was created is written down. Each cloud gets a
+directory of its own under `deploy/`, since Terraform reads every `.tf` file in a directory as one
+configuration:
+
+```
+rp/deploy/gcp/deploy.sh <gcp-project> [region]     # region defaults to asia-northeast1
+```
+
+The image is built by Cloud Build, since Cloud Run runs amd64 and a Mac builds arm64, and is tagged
+with the commit. The script first enables the two APIs Terraform works through (Cloud Resource
+Manager and Service Usage), then applies once to create the registry, builds, and applies again.
+`terraform output url` in `deploy/gcp/` prints where the RP is.
+
+The state stays in `deploy/gcp/` and is not committed, and so does `terraform.tfvars`, where the script
+records the project, region and image of the last deploy. That makes `terraform plan` and
+`terraform destroy` in `deploy/gcp/` work without arguments; `destroy` takes everything down again but
+leaves the APIs enabled. `terraform.tfvars.sample` shows its shape, for running Terraform there
+without the script.
+
 ## Known limitations
 
 - **Open this in your default browser.** The OP returns the response by opening `redirect_uri`,

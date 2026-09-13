@@ -39,3 +39,4 @@ When unsure, ask whether the change touches the Decision section. If it does, it
 | [0011](docs/decisions/0011-identities-per-rp.md) | An identity is a key for one RP; an RP may have several | Touching identities, key storage, `sub`, or anything about linkability |
 | [0012](docs/decisions/0012-english-and-japanese-ui.md) | The apps speak English and Japanese, following the user; tests pin the language | Adding or changing wording in the app or the RP, or writing a test that reads the screen |
 | [0013](docs/decisions/0013-rp-reports-its-own-http-redirect.md) | The test RP reports its own http redirect_uri; the loopback exception is for native apps only | Touching the RP's warnings, or wondering why its defaults warn |
+| [0014](docs/decisions/0014-rp-hosted-on-cloud-run-with-terraform.md) | The hosted RP is Cloud Run, described in Terraform; Cloud Build makes the image | Touching `rp/deploy/`, the Dockerfile, or how the RP is hosted |

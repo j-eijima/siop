@@ -1,0 +1,7 @@
+# Cloud Build receives only what the Dockerfile copies. Without this it would
+# upload everything here, Terraform's state and provider binaries included.
+*
+!Dockerfile
+!serve.py
+!public/
+!public/**

@@ -1,0 +1,16 @@
+# The shape of terraform.tfvars, which deploy.sh writes on every deploy so that
+# a later `terraform plan` or `terraform destroy` here needs no arguments.
+#
+# terraform.tfvars itself is not committed (.gitignore): it names one person's
+# project. To run Terraform here without deploy.sh, copy this file to
+# terraform.tfvars and fill it in.
+
+# The GCP project the RP runs in. Project IDs are unique across all of GCP.
+project = "your-gcp-project"
+
+# Optional; asia-northeast1 when left out.
+region = "asia-northeast1"
+
+# The image to run. It has to exist already: deploy.sh builds it, tagged with
+# the commit, as <region>-docker.pkg.dev/<project>/siop/rp:<commit>.
+image = "asia-northeast1-docker.pkg.dev/your-gcp-project/siop/rp:0123abc"

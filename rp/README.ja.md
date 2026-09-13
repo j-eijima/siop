@@ -109,6 +109,27 @@ gcloud run deploy siop-rp --source rp --allow-unauthenticated
 
 スマホやタブレットで試すなら、ホストしてしまうのが現実的。証明書が端末の信頼済みのものになる。
 
+### Terraform で建てる
+
+`deploy/gcp/` に同じ構成を Terraform で書いてある — Cloud Run のサービス、イメージの置き場、
+それらに要る API。何を作ったかが記録として残る。Terraform は1つのディレクトリの `.tf` をすべて
+1つの構成として読むので、クラウドごとに `deploy/` の下にディレクトリを分ける。
+
+```
+rp/deploy/gcp/deploy.sh <gcp-project> [region]     # region の既定は asia-northeast1
+```
+
+Cloud Run は amd64 で動き、Mac は arm64 でビルドするので、イメージは Cloud Build で作り、
+コミットでタグを付ける。スクリプトは最初に Terraform が API を扱うのに使う2つ(Cloud Resource
+Manager と Service Usage)を有効にし、イメージの置き場を作るために一度 apply し、ビルドして、
+もう一度 apply する。RP の URL は `deploy/gcp/` で `terraform output url` を実行すると出る。
+
+状態ファイルは `deploy/gcp/` に置き、コミットしない。スクリプトが最後のデプロイの
+プロジェクト・リージョン・イメージを書き出す `terraform.tfvars` も同じ扱い。これにより `deploy/gcp/` で
+`terraform plan` や `terraform destroy` を引数なしで実行できる。`destroy` で全部片付くが、
+API は有効のまま残る。スクリプトを使わずに Terraform を動かすときは、`terraform.tfvars.sample` を
+見本にする。
+
 ## 既知の制約
 
 - **既定のブラウザで開くこと。** OP は `redirect_uri` を開いて応答を返すが、iOS は https を
