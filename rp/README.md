@@ -92,6 +92,8 @@ Node is all that is needed; there are no dependencies.
   Swift build, so a stale fixture cannot hide an interoperability regression. Skipped
   automatically where SIOPKit cannot be built
 - `test/state.test.mjs` — the `state` comparison, which happens outside the token
+- `test/pending.test.mjs` — one response, and only one, is accepted for a request, even when two
+  tabs read the same record before either has finished verifying
 - `test/request.test.mjs` — the spec's rules on the request itself. Section 3.2.2.1 allows an
   http `redirect_uri` only to a native app, and only on the three hosts it names — `localhost`,
   `127.0.0.1`, `[::1]`. This RP is a web page, so it reports even its own default

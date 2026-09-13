@@ -272,6 +272,7 @@ final class AuthenticationSession: ObservableObject {
         case .invalidKey: return String(localized: "Could not read the key")
         case let .invalidToken(reason): return String(localized: "Invalid ID Token: \(reason)")
         case let .keyStore(status): return String(localized: "Keychain unavailable (OSStatus \(Int(status)))")
+        case .unreadableRecord: return String(localized: "An identity record on this device cannot be read")
         }
     }
 }

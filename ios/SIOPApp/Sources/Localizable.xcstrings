@@ -89,6 +89,16 @@
         }
       }
     },
+    "An identity record on this device cannot be read" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "端末にある識別子の記録を読み取れません"
+          }
+        }
+      }
+    },
     "At signing" : {
       "localizations" : {
         "ja" : {

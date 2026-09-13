@@ -210,6 +210,28 @@ final class AuthenticationSessionTests: XCTestCase {
         func removeKey(tag: String) throws { try base.removeKey(tag: tag) }
     }
 
+    /// Records that cannot be read, as when one no longer decodes.
+    private final class UnreadableRecords: SIOPIdentityRecords {
+        func loadAll() throws -> [SIOPIdentity] { throw SIOPError.unreadableRecord }
+        func save(_ identity: SIOPIdentity) throws {}
+        func remove(id: String) throws {}
+    }
+
+    /// A record that does not decode must stop the request too: skipping it
+    /// would make its RP look new.
+    func testARequestStopsWhenARecordCannotBeRead() throws {
+        let deliveries = Deliveries()
+        let store = SIOPIdentityStore(records: UnreadableRecords(), keys: InMemoryIdentityKeys(), tagPrefix: "test")
+        let session = AuthenticationSession(store: store, open: deliveries.open)
+
+        session.receive(requestURL())
+
+        guard case .failed = session.phase else {
+            return XCTFail("記録を読めないのに同意画面へ進んでいる")
+        }
+        XCTAssertTrue(deliveries.urls.isEmpty)
+    }
+
     /// If the identities cannot be read, an RP this device has answered would
     /// look new, and answering it would make a different subject. The request
     /// must stop there rather than reach the consent screen.

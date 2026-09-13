@@ -11,4 +11,6 @@ public enum SIOPError: Error, Equatable {
     case invalidToken(String)
     /// The Keychain refused an operation, with the status it gave.
     case keyStore(OSStatus)
+    /// A stored identity record does not decode.
+    case unreadableRecord
 }

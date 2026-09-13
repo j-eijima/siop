@@ -347,6 +347,18 @@ final class IdentityStoreTests: XCTestCase {
         XCTAssertEqual(keys.created, 0)
     }
 
+    /// A record that does not decode has to stop the lookup, not vanish from
+    /// it: a vanished identity makes its RP look new.
+    func testARecordThatDoesNotDecodeIsAnErrorNotAnOmission() throws {
+        let identity = try SIOPIdentityStore.ephemeral().createIdentity(for: one, label: "kept")
+        let good = try JSONEncoder().encode(identity)
+        XCTAssertEqual(try KeychainIdentityRecords.decode([good]).map(\.id), [identity.id])
+
+        XCTAssertThrowsError(try KeychainIdentityRecords.decode([good, Data("{not a record".utf8)])) { error in
+            XCTAssertEqual(error as? SIOPError, .unreadableRecord)
+        }
+    }
+
     func testATokenSignedAsAnIdentityCarriesItsSubject() throws {
         let store = SIOPIdentityStore.ephemeral()
         let identity = try store.createIdentity(for: one)

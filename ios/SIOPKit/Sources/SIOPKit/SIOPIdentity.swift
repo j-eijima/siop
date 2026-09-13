@@ -237,8 +237,22 @@ public struct KeychainIdentityRecords: SIOPIdentityRecords {
         guard status == errSecSuccess, let items = result as? [Data] else {
             throw SIOPError.keyStore(status)
         }
+        return try Self.decode(items)
+    }
+
+    /// Every record, or an error. A record that does not decode is not
+    /// skipped: dropping it would drop an identity, the RP it answers would
+    /// look new, and answering that RP would make a different subject. So the
+    /// record's shape can change only in ways old records still decode.
+    static func decode(_ items: [Data]) throws -> [SIOPIdentity] {
         let decoder = JSONDecoder()
-        return items.compactMap { try? decoder.decode(SIOPIdentity.self, from: $0) }
+        return try items.map { data in
+            do {
+                return try decoder.decode(SIOPIdentity.self, from: data)
+            } catch {
+                throw SIOPError.unreadableRecord
+            }
+        }
     }
 
     public func save(_ identity: SIOPIdentity) throws {
