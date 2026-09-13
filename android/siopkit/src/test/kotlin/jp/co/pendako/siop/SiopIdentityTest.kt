@@ -87,6 +87,33 @@ class SiopIdentityStoreTest {
         assertTrue(keys.aliases.all { keys.key(it) == null })
     }
 
+    // A save that fails after the record became visible — its sync failing —
+    // must not leave a record whose key is gone.
+    @Test
+    fun `a save that fails after the record appeared takes the record back before the key`() {
+        val keys = CountingKeys()
+        val records = SavesThenFails()
+        val store = store(keys = keys, records = records)
+
+        assertFailsWith<SiopError.Storage> { store.createIdentity(clientId) }
+
+        assertTrue(records.loadAll().isEmpty())
+        assertTrue(keys.aliases.all { keys.key(it) == null })
+    }
+
+    @Test
+    fun `a record that cannot be taken back keeps its key`() {
+        val keys = CountingKeys()
+        val records = SavesThenFails(removes = false)
+        val store = store(keys = keys, records = records)
+
+        assertFailsWith<SiopError.Storage> { store.createIdentity(clientId) }
+
+        val left = records.loadAll().single()
+        assertEquals(left.keyAlias, keys.aliases.single())
+        assertTrue(store.publicJwk(left).thumbprint().isNotEmpty(), "鍵の無い識別子が残っている")
+    }
+
     // Keys made by the key-per-RP version (docs/decisions/0003) are known to
     // their RPs by the subject they produce, so they are taken over.
     @Test
@@ -134,6 +161,20 @@ class SiopIdentityStoreTest {
         override fun key(alias: String) = base.key(alias)
         override fun createKey(alias: String): SiopKeyProvider = base.createKey(alias).also { aliases += alias }
         override fun removeKey(alias: String) = base.removeKey(alias)
+    }
+
+    /** Records whose save lands and then reports failure, as when syncing fails after the rename. */
+    private class SavesThenFails(private val removes: Boolean = true) : SiopIdentityRecords {
+        private val base = InMemoryIdentityRecords()
+        override fun loadAll() = base.loadAll()
+        override fun save(identity: SiopIdentity) {
+            base.save(identity)
+            throw SiopError.Storage("sync failed")
+        }
+        override fun remove(id: String) {
+            if (!removes) throw SiopError.Storage("cannot delete")
+            base.remove(id)
+        }
     }
 
     private class RefusingRecords : SiopIdentityRecords {

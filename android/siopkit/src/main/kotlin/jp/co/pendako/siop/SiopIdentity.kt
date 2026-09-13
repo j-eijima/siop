@@ -110,7 +110,14 @@ class SiopIdentityStore(
         try {
             records.save(identity)
         } catch (cause: Exception) {
-            runCatching { keys.removeKey(alias) }
+            // A save can fail after the record has become visible — when
+            // syncing it fails, say. The record is removed first, and the key
+            // only once no record can point at it: a record left without its
+            // key would be an identity that can never answer, and would stop
+            // its RP being answered as anyone new.
+            if (runCatching { records.remove(identity.id) }.isSuccess) {
+                runCatching { keys.removeKey(alias) }
+            }
             throw cause
         }
         return identity
