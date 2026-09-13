@@ -1,11 +1,11 @@
 ---
 name: siop-context
-description: Where to look before changing anything in the SIOP reference implementation — what the project is, which documents are authoritative for requirements, behaviour, and design decisions, and the rules that changes have to hold to. Use at the start of any task in this repository, and whenever a task touches app or RP behaviour, documentation, or a new implementation.
+description: Where to look before changing anything in the SIOP example implementation — what the project is, which documents are authoritative for requirements, behaviour, and design decisions, and the rules that changes have to hold to. Use at the start of any task in this repository, and whenever a task touches app or RP behaviour, documentation, or a new implementation.
 ---
 
 # SIOP — orientation
 
-A reference implementation of Self-Issued OpenID Provider (OpenID Connect Core 1.0, Section 7).
+An example implementation of Self-Issued OpenID Provider (OpenID Connect Core 1.0, Section 7).
 The same protocol is implemented once per OS in that OS's default language, and every
 implementation is checked against one shared Relying Party in `rp/`.
 

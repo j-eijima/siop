@@ -1,6 +1,6 @@
 ---
 name: siop-decisions
-description: Design decisions already made in the SIOP reference implementation and the reasoning behind them, as an index of numbered records. Use before changing key handling, subject derivation, the advertised metadata, the RP's verification path, the cross-implementation test arrangement, the push review gate, or the documentation rules — and before proposing something that looks like an obvious improvement, in case it was already decided against.
+description: Design decisions already made in the SIOP example implementation and the reasoning behind them, as an index of numbered records. Use before changing key handling, subject derivation, the advertised metadata, the RP's verification path, the cross-implementation test arrangement, the push review gate, or the documentation rules — and before proposing something that looks like an obvious improvement, in case it was already decided against.
 ---
 
 # SIOP — decision records

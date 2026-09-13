@@ -2,7 +2,7 @@
 
 **English** | [日本語](README.ja.md)
 
-A reference implementation of
+An example implementation of
 [Section 7, Self-Issued OpenID Provider](https://openid.net/specs/openid-connect-core-1_0.html#SelfIssued)
 of OpenID Connect Core 1.0.
 

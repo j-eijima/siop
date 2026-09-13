@@ -3,7 +3,7 @@
 [English](README.md) | **日本語**
 
 OpenID Connect Core 1.0 [7章 Self-Issued OpenID Provider](https://openid-foundation-japan.github.io/openid-connect-core-1_0.ja.html#SelfIssued)
-のリファレンス実装。
+の実装例。
 
 Self-Issued OpenID Provider (SIOP) は、認証サーバを置かずに端末自身が OpenID Provider として
 振る舞う仕組み。端末が持つ鍵で自分に対して ID Token を発行し、その公開鍵を `sub_jwk` として
