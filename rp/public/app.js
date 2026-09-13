@@ -4,6 +4,7 @@
 
 import { known, onLanguageChange, t } from "./i18n.js";
 import { renderParams } from "./params-table.js";
+import { writePendingRequest } from "./pending.js";
 import { httpRedirectForbidden } from "./spec-rules.js";
 
 const STORAGE_KEY = "siop-rp.pending-request";
@@ -103,21 +104,39 @@ function renderFields() {
   })));
 }
 
-/// Redraws what depends on the values. `record` is false for a redraw that
-/// changes no value — a switch of language — since writing the record then
-/// could bring back a request whose response has already been accepted.
-function refresh({ record = true } = {}) {
-  const requestURL = buildRequestURL();
-  requestURLBlock.textContent = requestURL.replace(/&/g, "\n&");
-  startLink.href = requestURL;
+/// The request is offered only once its record is written: a response to a
+/// request this browser has no record of could never be accepted.
+/// `writeFailed` is set when writing it did not succeed, and is reported.
+let revision = 0;
+let lastRecord = null;
+let lastValues = null;
+let writable = false;
+let writeFailed = false;
+startLink.addEventListener("click", (event) => {
+  if (!writable) event.preventDefault();
+});
 
+function renderWarnings() {
   const found = warnings();
+  if (writeFailed) found.push(t("warn.unrecorded"));
   warningsBox.hidden = found.length === 0;
   warningList.replaceChildren(...found.map((warning) => {
     const item = document.createElement("li");
     item.textContent = warning;
     return item;
   }));
+}
+
+/// Redraws what depends on the values. `record` is false for a redraw that
+/// changes no value — a switch of language — since writing the record then
+/// could bring back a request whose response has already been accepted; for
+/// the same reason a redraw whose values are unchanged writes nothing.
+/// `removed` is the record another tab removed, when that prompted the redraw:
+/// the next one is written only if nothing has replaced it since.
+function refresh({ record = true, removed = null } = {}) {
+  const requestURL = buildRequestURL();
+  requestURLBlock.textContent = requestURL.replace(/&/g, "\n&");
+  if (writable) startLink.href = requestURL;
 
   // What the callback will check the response against.
   const expected = {
@@ -126,7 +145,32 @@ function refresh({ record = true } = {}) {
     audience: valueOf("client_id"),
     requestURL,
   };
-  if (record) localStorage.setItem(STORAGE_KEY, JSON.stringify(expected));
+  const serialized = JSON.stringify(expected);
+  if (record && serialized !== lastValues) {
+    lastValues = serialized;
+    const run = ++revision;
+    writable = false;
+    writeFailed = false;
+    startLink.removeAttribute("href");
+    // Under the lock the result page claims with, so a write never lands
+    // between a claim's check and its removal, and an edit overtaken by a
+    // newer one while it waited writes nothing.
+    writePendingRequest({ setItem: (key, value) => localStorage.setItem(key, value) },
+      STORAGE_KEY, navigator.locks, expected,
+      () => run === revision && (removed === null ||
+        (lastRecord === removed && localStorage.getItem(STORAGE_KEY) === null)))
+      .then((written) => {
+        if (run !== revision) return;
+        writable = written;
+        writeFailed = !written;
+        if (written) {
+          lastRecord = serialized;
+          startLink.href = requestURL;
+        }
+        renderWarnings();
+      });
+  }
+  renderWarnings();
   renderParams(expectationsBox, [
     { name: "aud", value: expected.audience, why: t("expect.aud") },
     { name: "nonce", value: expected.nonce, why: t("expect.nonce") },
@@ -178,11 +222,13 @@ document.getElementById("copy").addEventListener("click", async (event) => {
 // record. Prepare the next request with a fresh nonce and state, so this page
 // never offers one that has already been used.
 window.addEventListener("storage", (event) => {
-  if (event.key !== STORAGE_KEY || event.newValue !== null) return;
+  if (event.storageArea !== localStorage || event.key !== STORAGE_KEY ||
+      event.newValue !== null || event.oldValue !== lastRecord || !writable) return;
   for (const parameter of parameters) {
     if (parameter.name === "nonce" || parameter.name === "state") parameter.value = randomToken();
   }
-  render();
+  renderFields();
+  refresh({ removed: event.oldValue });
 });
 
 onLanguageChange(() => {

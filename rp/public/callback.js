@@ -26,15 +26,29 @@ const fragment = new URLSearchParams(location.hash.slice(1));
 // Safari can hand a new response to a tab already showing this page. Only the
 // fragment changes, which does not reload it, and the page reads the fragment
 // once — so without this it would go on showing the previous response as if
-// it were the new one.
-window.addEventListener("hashchange", () => location.reload());
+// it were the new one. That holds after a claim too: the new response is
+// judged on its own once the page has reloaded. Until then `leaving`, and the
+// URL check in the claim, keep the response on its way out from claiming.
+const responseURL = location.href;
+let leaving = false;
+window.addEventListener("hashchange", () => {
+  leaving = true;
+  ++evaluation;
+  location.reload();
+});
 
 // One-shot: the request is claimed only by a response that passes every check
 // against it, so a stale tab or an unsolicited link, with a state or without,
 // cannot use it up; and only one response is accepted, so a second tab
 // replaying the first is turned away. The values stay in this page, so the
 // response can still be re-checked below.
-const request = pendingRequest(localStorage, STORAGE_KEY, navigator.locks);
+// Access localStorage inside the storage operations: even its getter may
+// throw when browser storage is disabled.
+const request = pendingRequest({
+  getItem: (key) => localStorage.getItem(key),
+  setItem: (key, value) => localStorage.setItem(key, value),
+  removeItem: (key) => localStorage.removeItem(key),
+}, STORAGE_KEY, navigator.locks);
 const pending = request.value;
 
 /// What this RP expects, as it sent it. Null throughout when this browser has
@@ -112,7 +126,7 @@ function row(check) {
 /// Show what was sent and what came back before judging either.
 function renderExchange() {
   renderParams($("request"), pending
-    ? [...new URL(pending.requestURL).searchParams].map(([name, value]) => ({ name, value }))
+    ? [...new URL(pending.requestURL ?? "openid://").searchParams].map(([name, value]) => ({ name, value }))
     : [{ name: t("note.none"), value: "", why: t("why.noRecord") }]);
 
   const received = [...fragment].map(([name, value]) => ({
@@ -129,15 +143,35 @@ function renderExchange() {
 /// nothing.
 let evaluation = 0;
 
-async function evaluate() {
+/// The response checked against the request as recorded — the only check a
+/// claim can follow. Made once, so every redraw judges the same result, and a
+/// claim is never contradicted by a later check on the same page: of exp, say,
+/// once the token has aged past it.
+let verifiedAsSent = null;
+
+function evaluate() {
   const run = ++evaluation;
+  return evaluateResponse(run).catch(() => {
+    if (run !== evaluation || leaving) return;
+    setVerdict("ng", t("verdict.unavailable"), t("verdict.unavailableDetail"));
+  });
+}
+
+async function evaluateResponse(run) {
   // Read once: the expectations checked and the decision made from them have
   // to be the same ones.
   const chosen = scenario.value;
-  const expected = SCENARIOS[chosen](recorded);
+  const expected = (SCENARIOS[chosen] ?? SCENARIOS.normal)(recorded);
   const body = $("comparison-body");
   $("thumbprint-raw").textContent = t("result.noToken");
   $("token-raw").textContent = t("result.noToken");
+
+  if (["id_token", "state", "error"].some((key) => fragment.getAll(key).length > 1)) {
+    setVerdict("ng", t("verdict.ambiguous"), t("verdict.ambiguousDetail"));
+    body.replaceChildren();
+    $("result-count").textContent = t("count.notReceived");
+    return;
+  }
 
   if (fragment.has("error")) {
     // Section 3.1.2.6: the OP reports a refusal as an error response.
@@ -159,7 +193,9 @@ async function evaluate() {
   }
 
   const idToken = fragment.get("id_token");
-  const result = await verifySelfIssuedIDToken(idToken, { audience: expected.audience, nonce: expected.nonce });
+  const verify = () => verifySelfIssuedIDToken(idToken, { audience: expected.audience, nonce: expected.nonce });
+  const result = await (chosen === "normal" ? (verifiedAsSent ??= verify()) : verify());
+  if (run !== evaluation || leaving) return;
   // state travels outside the token, so it is checked apart from it — and a
   // mismatch no longer hides every other check.
   const checks = [...result.checks, checkState(expected.state, fragment.get("state"))]
@@ -167,12 +203,13 @@ async function evaluate() {
   const failed = checks.filter((check) => !check.ok);
 
   let verdict;
-  if (failed.length > 0 && !pending) {
+  if (!pending) {
     // Most often this means the response landed in a different browser: iOS
     // sends an https URL to the *default* browser, and the OP has no way to
     // return to the specific browser that started the request. nonce and
     // state live in that browser's storage, so the check fails closed.
-    verdict = ["ng", t("verdict.noRecord"), t("verdict.noRecordDetail")];
+    const reason = request.failure ?? "noRecord";
+    verdict = ["ng", t(`verdict.${reason}`), t(`verdict.${reason}Detail`)];
   } else if (failed.length > 0) {
     verdict = ["ng", t("verdict.failed"), t("verdict.failedDetail", { ids: failed.map((check) => check.id).join(" / ") })];
   } else if (chosen !== "normal") {
@@ -180,14 +217,16 @@ async function evaluate() {
     // the one this RP sent. That is a way to watch the checks, never an
     // authentication, and it claims nothing.
     verdict = ["ng", t("verdict.simulated"), t("verdict.simulatedDetail")];
-  } else if (await request.accept({ expiresAt: result.payload.exp })) {
+  } else if (await request.accept({
+    expiresAt: result.payload.exp,
+    isCurrent: () => !leaving && scenario.value === "normal" && location.href === responseURL,
+  })) {
     // EndToEndRPTests waits for the English title, verdict.ok in i18n.js —
     // Safari hands XCUITest no DOM ids — so change the two together.
     verdict = ["ok", t("verdict.ok"), t("verdict.okDetail", { sub: result.payload.sub })];
-  } else if (navigator.locks) {
-    verdict = ["ng", t("verdict.replayed"), t("verdict.replayedDetail")];
   } else {
-    verdict = ["ng", t("verdict.noLocks"), t("verdict.noLocksDetail")];
+    const reason = request.failure ?? "unavailable";
+    verdict = ["ng", t(`verdict.${reason}`), t(`verdict.${reason}Detail`)];
   }
 
   // A newer evaluation started while this one waited; that one draws.

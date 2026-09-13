@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { pendingRequest } from "../public/pending.js";
+import { pendingRequest, writePendingRequest } from "../public/pending.js";
 
 const KEY = "siop-rp.pending-request";
 
@@ -137,5 +137,136 @@ describe("待っているリクエストの受け入れ", () => {
 
   it("記録した値をそのまま返す", () => {
     assert.equal(pendingRequest(withRecord("n1"), KEY, new Locks()).value.nonce, "n1");
+  });
+});
+
+const SPENT = "siop-rp.spent-nonces";
+
+/// A promise and the function that settles it, to hold a lock until the test
+/// lets it go.
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+};
+
+describe("重なり合う受け入れと書き込み", () => {
+  // A redraw on the same page claims again while the first claim still waits
+  // for the lock another tab holds.
+  it("同じページで重なった受け入れは一つの取得を分け合い、受け入れたままでいる", async () => {
+    const storage = withRecord();
+    const locks = new Locks();
+    const gate = deferred();
+    const held = locks.request(KEY, () => gate.promise);
+    const page = pendingRequest(storage, KEY, locks);
+    const first = page.accept(valid);
+    const second = page.accept(valid);
+    gate.resolve();
+    await held;
+    assert.deepEqual(await Promise.all([first, second]), [true, true]);
+    assert.equal(page.accepted, true);
+    assert.equal(await page.accept(valid), true);
+  });
+
+  it("ロックを待つ間に期待値やフラグメントが変われば、何も消費しない", async () => {
+    const storage = withRecord();
+    const locks = new Locks();
+    const gate = deferred();
+    locks.request(KEY, () => gate.promise);
+    const page = pendingRequest(storage, KEY, locks);
+    let current = true;
+    const claim = page.accept({ ...valid, isCurrent: () => current });
+    current = false;
+    gate.resolve();
+    assert.equal(await claim, false);
+    assert.equal(storage.getItem(KEY), recorded("n1"));
+    assert.equal(await page.accept(valid), true);
+  });
+
+  it("先に並んだ書き込みがあれば、古いリクエストへの受け入れは新しい記録を消費しない", async () => {
+    const storage = withRecord();
+    const locks = new Locks();
+    const gate = deferred();
+    locks.request(KEY, () => gate.promise);
+    const page = pendingRequest(storage, KEY, locks);
+    const write = writePendingRequest(storage, KEY, locks, JSON.parse(recorded("n2")), () => true);
+    const claim = page.accept(valid);
+    gate.resolve();
+    assert.equal(await write, true);
+    assert.equal(await claim, false);
+    assert.equal(storage.getItem(KEY), recorded("n2"));
+  });
+
+  it("遅れて届いた削除の通知では、その後に書かれた新しいリクエストを上書きしない", async () => {
+    const storage = withRecord();
+    const locks = new Locks();
+    const gate = deferred();
+    locks.request(KEY, () => gate.promise);
+    const write = writePendingRequest(storage, KEY, locks, JSON.parse(recorded("event")),
+      () => storage.getItem(KEY) === null);
+    storage.setItem(KEY, recorded("newer"));
+    gate.resolve();
+    assert.equal(await write, false);
+    assert.equal(storage.getItem(KEY), recorded("newer"));
+  });
+
+  it("使用済みの nonce の記録が読めない・書けないときは、記録を消す前に止まる", async () => {
+    for (const bad of ['{}', '[{"nonce":"n1"}]', 'broken']) {
+      const storage = withRecord();
+      storage.setItem(SPENT, bad);
+      const page = pendingRequest(storage, KEY, new Locks());
+      assert.equal(await page.accept(valid), false);
+      assert.equal(page.failure, "unavailable");
+      assert.equal(storage.getItem(KEY), recorded("n1"));
+    }
+    const storage = withRecord();
+    storage.setItem = () => { throw new Error("quota"); };
+    assert.equal(await pendingRequest(storage, KEY, new Locks()).accept(valid), false);
+    assert.equal(storage.getItem(KEY), recorded("n1"));
+  });
+
+  it("壊れた記録、有限でない時刻、期限切れのトークンでは受け入れない", async () => {
+    for (const record of ['broken', '{}', '[]', '{"nonce":""}']) {
+      const storage = withRecord();
+      storage.setItem(KEY, record);
+      assert.equal(await pendingRequest(storage, KEY, new Locks()).accept(valid), false);
+    }
+    for (const times of [{ ...valid, expiresAt: Infinity }, { ...valid, now: NaN },
+      { expiresAt: NOW - 120, now: NOW }]) {
+      const storage = withRecord();
+      assert.equal(await pendingRequest(storage, KEY, new Locks()).accept(times), false);
+      assert.equal(storage.getItem(KEY), recorded("n1"));
+    }
+  });
+
+  it("期限はロックを待った後で確かめる", async () => {
+    const storage = withRecord();
+    const gate = deferred();
+    const locks = new Locks();
+    locks.request(KEY, () => gate.promise);
+    const originalNow = Date.now;
+    try {
+      Date.now = () => NOW * 1000;
+      const page = pendingRequest(storage, KEY, locks);
+      const claim = page.accept({ expiresAt: NOW + 10 });
+      Date.now = () => (NOW + 130) * 1000;
+      gate.resolve();
+      assert.equal(await claim, false);
+      assert.equal(page.failure, "expired");
+      assert.equal(storage.getItem(KEY), recorded("n1"));
+    } finally { Date.now = originalNow; }
+  });
+
+  it("記録を消せなくても使用済みの nonce は残り、ロックの拒否は理由として伝わる", async () => {
+    const storage = withRecord();
+    const remove = storage.removeItem.bind(storage);
+    storage.removeItem = () => { throw new Error("storage denied"); };
+    const page = pendingRequest(storage, KEY, new Locks());
+    assert.equal(await page.accept(valid), false);
+    storage.removeItem = remove;
+    assert.equal(await pendingRequest(storage, KEY, new Locks()).accept(valid), false);
+    const rejected = pendingRequest(withRecord(), KEY, { request: async () => { throw new Error("denied"); } });
+    assert.equal(await rejected.accept(valid), false);
+    assert.equal(rejected.failure, "unavailable");
   });
 });
