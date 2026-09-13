@@ -29,4 +29,8 @@ New wording goes into both languages in the same change, as documentation does. 
 catalog or the RP's dictionary for a missing Japanese entry; a missing one shows the English.
 
 The UI mock stays in Japanese only. It records a design and is not kept in step with the apps.
-Android, not yet rebuilt, stays Japanese until it is.
+Android follows the same terms: its strings are English in `values/` and Japanese in `values-ja/`,
+and its screen tests show the screens in English. Its end-to-end test finds the app's buttons by
+test tag, exposed as resource ids.
+
+Corrected: 2026-09-13 — Android has been rebuilt; the consequences said it stayed Japanese.

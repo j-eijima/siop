@@ -8,8 +8,8 @@ fields, and validation expectations line up. Everything else in the UI comes aft
 
 ## Where this stands
 
-Built on both sides. The iOS app shows every parameter of a received request as it arrived, and
-marks each value of the response preview with where it comes from; Android does not do this yet.
+Built on both sides. The iOS and Android apps show every parameter of a received request as it
+arrived, and mark each value of the response preview with where it comes from.
 The test RP in `rp/` shows the request before it is sent, marks what the response will be checked
 against, and lays each check beside what was expected. The
 [HTML UI mock](../../../rp/public/mock.html) shows both with temporary in-memory keys; it is a

@@ -28,3 +28,8 @@ jobs:
       - name: Build the app
         working-directory: android
         run: ./gradlew :app:assembleDebug --console=plain
+      # The session is plain Kotlin, so what it decides runs on the JVM here.
+      # The screens and the Keystore need a device: connectedDebugAndroidTest.
+      - name: App session tests
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest --console=plain

@@ -7,13 +7,10 @@ one screen a person must read, so it is specified rather than left to the implem
 
 ## Where this stands
 
-Built on iOS: the consent screen shows the request as it arrived, lets the user choose or create
-the identity to answer as ([identity/](../identity/)), and previews every value that will be
-signed, public key included, each marked with where it comes from ([parameters/](../parameters/)).
-Declining returns `access_denied` on both platforms. Android shows the requesting `client_id`, the
-requested scope, `response_type`, `nonce` and `state`, and either the subject already established
-for that Relying Party or a note that responding will create one; it does not show the public key
-or offer a choice of identity.
+Built on iOS and Android: the consent screen shows the request as it arrived, lets the user choose
+or create the identity to answer as ([identity/](../identity/)), and previews every value that will
+be signed, public key included, each marked with where it comes from ([parameters/](../parameters/)).
+Declining returns `access_denied`.
 
 ## Behaviour
 
@@ -71,5 +68,6 @@ Feature: Consent and the response preview
 ## Checked by test instead
 
 That the token the Relying Party receives validates under Section 7.5 is decided end to end by
-`ios/SIOPApp/UITests/EndToEndRPTests.swift` and by the cross-implementation suites in `rp/test/`.
+`ios/SIOPApp/UITests/EndToEndRPTests.swift`, by `EndToEndRpTest` in `android/app/src/androidTest/`,
+and by the cross-implementation suites in `rp/test/`.
 The scenarios above stop at the point the response leaves the app.

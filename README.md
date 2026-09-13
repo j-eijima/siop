@@ -35,8 +35,8 @@ An interactive [HTML UI mock](rp/public/mock.html) demonstrates identity managem
 selection, the response preview, and the RP's side-by-side parameter checks. Open the file in a
 browser, or visit `/mock.html` on the test RP. It uses temporary in-memory keys and real WebCrypto
 operations, without contacting an external RP. Reloading clears the identities. The mock itself is
-a demonstration, not an interoperability test. The iOS app implements its SIOP side and the test RP
-its RP side; Android does not yet.
+a demonstration, not an interoperability test. The iOS and Android apps implement its SIOP side and
+the test RP its RP side.
 
 ## Status
 

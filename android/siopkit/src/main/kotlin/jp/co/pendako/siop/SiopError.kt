@@ -7,4 +7,8 @@ sealed class SiopError(message: String) : Exception(message) {
     class InvalidScope : SiopError("scope must contain openid")
     class InvalidKey(val reason: String) : SiopError("invalid key: $reason")
     class InvalidToken(val reason: String) : SiopError("invalid token: $reason")
+    /** Where identities or keys are kept could not be read or written. */
+    class Storage(val reason: String) : SiopError("storage unavailable: $reason")
+    /** An identity record exists but does not decode. */
+    class UnreadableRecord : SiopError("an identity record cannot be read")
 }

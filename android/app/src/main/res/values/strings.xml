@@ -1,4 +1,114 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- English is the source (docs/decisions/0012). values-ja carries the
+     Japanese; a string missing there shows in English. Protocol values are
+     never translated, so they do not appear here. -->
 <resources>
     <string name="app_name">SIOP</string>
+
+    <!-- Home -->
+    <string name="identities_header">Your identities</string>
+    <string name="home_identities_explain">Each identity is a separate key for one RP. You can answer the same RP as several identities, but no identity is ever used with another RP.</string>
+    <string name="home_identities_footer">sub is the JWK thumbprint (RFC 7638) of the public key. Even RPs working together cannot tell they share a user.</string>
+    <string name="home_empty">No identities yet. When an RP sends an authentication request, you can create an identity for it.</string>
+    <string name="home_metadata_header">Discovery metadata</string>
+    <string name="home_metadata_footer">When an authentication request starting with openid:// arrives, the app asks which identity should answer.</string>
+
+    <!-- Consent -->
+    <string name="consent_title">Which identity will answer?</string>
+    <string name="request_panel_title">Request received</string>
+    <string name="requester_unverified">Requester unverified</string>
+    <string name="requester_label">Requester / client_id</string>
+    <string name="requester_warning">This URL has not been verified. Make sure you recognise who is asking.</string>
+    <string name="no_value">(no value)</string>
+    <string name="identities_panel_subtitle">Choose the identity to use with this RP</string>
+    <plurals name="identity_count">
+        <item quantity="one">%d identity</item>
+        <item quantity="other">%d identities</item>
+    </plurals>
+    <string name="first_request">First request from this requester. Answering creates an identity for it alone.</string>
+    <string name="create_identity">Create identity</string>
+    <string name="names_hint">Names are labels on this device only. The RP receives the sub derived from the public key, and the same RP can be answered as another identity too.</string>
+    <string name="details">Details</string>
+    <string name="preview_title">Response preview</string>
+    <string name="not_yet_signed">Not yet signed</string>
+    <string name="using_identity">Using the key and identity of %1$s</string>
+    <string name="new_identity_on_answer">A new key and identity for this RP will be created when you answer</string>
+    <string name="token_caption">ID Token · what will be signed</string>
+    <string name="origin_fixed">Fixed</string>
+    <string name="origin_from_client_id">From client_id</string>
+    <string name="origin_derived">Derived from the public key</string>
+    <string name="origin_chosen_key">The chosen public key</string>
+    <string name="origin_from_nonce">From nonce</string>
+    <string name="origin_at_signing">At signing</string>
+    <string name="origin_copied">Copied from the request</string>
+    <string name="iat_exp_value">Fixed at signing / expires %1$d minutes after issue</string>
+    <string name="show_whole_key">Show the whole public key</string>
+    <string name="collapse_key">Collapse the public key</string>
+    <string name="legend_key">From the chosen key</string>
+    <string name="legend_fixed">Fixed / at signing</string>
+    <string name="legend_hint">Switching identities changes the green rows. The blue rows correspond to the RP\'s request.</string>
+    <string name="other_scopes">%1$s requested too, but this implementation returns only sub, with no other claims.</string>
+    <string name="fragment_title">URL fragment · outside the ID Token</string>
+    <string name="omitted">(omitted)</string>
+    <string name="nonce_state_hint">nonce comes back inside the signed token, state outside it.</string>
+    <string name="created_on_answer">Created when you answer</string>
+    <string name="action_blocked">This RP\'s identity cannot be read right now, so no new one is made in its place. Try again, or create one yourself.</string>
+    <string name="action_new">A new key will sign, and the response goes back to the requester.</string>
+    <string name="action_chosen">The chosen key will sign, and the response goes back to the requester.</string>
+    <string name="decline">Decline</string>
+    <string name="use_new_identity">Use a new identity</string>
+    <string name="use_this_identity">Use this identity</string>
+    <string name="identity_for_rp">Identity for this RP</string>
+    <string name="key_unreadable_row">Key unreadable — this identity cannot answer</string>
+
+    <!-- Identity editor -->
+    <string name="identity_details">Identity details</string>
+    <string name="create">Create</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="name">Name</string>
+    <string name="name_placeholder">e.g. Personal, Testing</string>
+    <string name="note">Note</string>
+    <string name="note_placeholder">What it is for, for your own reference</string>
+    <string name="created_for_rp">Created for this RP</string>
+    <string name="creates_key_footer">Creates an RSA key for this RP and derives the sub from its public key.</string>
+    <string name="sub_header">sub · derived from the public key / not editable</string>
+    <string name="key_unreadable_detail">Key unreadable. This identity cannot answer.</string>
+    <string name="only_names_change">Only the name and note change. The public key and sub stay as they are.</string>
+    <string name="rp_it_answers">RP it answers</string>
+    <string name="public_key_disclosure">Public key sub_jwk and the JSON it is derived from</string>
+    <string name="thumbprint_json">JSON the thumbprint is taken over</string>
+    <string name="delete_identity_and_key">Delete identity and key</string>
+    <string name="delete_confirm_title">Delete this identity?</string>
+    <string name="key_unreadable_paren">(key unreadable)</string>
+    <!-- Keys in the Android Keystore cannot be exported, so none can be
+         restored from a backup: once deleted, a subject is gone for good. -->
+    <string name="delete_consequence">The signing key is deleted too, and this sub can never answer again. This does not delete the account the RP holds.</string>
+
+    <!-- Results -->
+    <string name="result_sent_title">ID Token returned</string>
+    <string name="result_sent_message">Sent the response to %1$s.</string>
+    <string name="result_undeliverable_title">Response not delivered</string>
+    <string name="result_undeliverable_message">No app can open %1$s. The ID Token was issued but has not reached the RP.</string>
+    <string name="result_declined_title">Request declined</string>
+    <string name="result_declined_message">Returned access_denied to %1$s.</string>
+    <string name="result_failed_title">Could not process the request</string>
+    <string name="close">Close</string>
+    <string name="problem_title">Something went wrong</string>
+    <string name="ok">OK</string>
+
+    <!-- Failures -->
+    <string name="failure_invalid_request">Invalid request: %1$s</string>
+    <string name="failure_unsupported_response_type">Unsupported response_type: %1$s</string>
+    <string name="failure_invalid_scope">scope does not include openid</string>
+    <string name="failure_invalid_key">Could not use the key: %1$s</string>
+    <string name="failure_invalid_token">Invalid ID Token: %1$s</string>
+    <string name="failure_storage">The device\'s storage cannot be used: %1$s</string>
+    <string name="failure_unreadable_record">An identity record on this device cannot be read</string>
+    <string name="failure_answers_only">This identity answers only %1$s. It cannot answer another RP.</string>
+    <string name="failure_no_stand_in">This RP already has an identity, but its key cannot be read. No new one was made in its place.</string>
+    <string name="failure_could_not_load">Could not load identities: %1$s</string>
+    <string name="failure_could_not_create">Could not create the identity: %1$s</string>
+    <string name="failure_could_not_save">Could not save: %1$s</string>
+    <string name="failure_could_not_delete">Could not delete: %1$s</string>
 </resources>

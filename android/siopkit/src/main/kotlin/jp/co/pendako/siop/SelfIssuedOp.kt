@@ -22,10 +22,21 @@ class SelfIssuedOp(private val keyStore: SiopKeyStore) {
     fun respond(
         request: AuthorizationRequest,
         nowEpochSeconds: Long = System.currentTimeMillis() / 1000,
-    ): AuthenticationResponse {
-        val key = keyStore.keyProvider(request.clientId)
-        val idToken = SelfIssuedIdToken.issue(request, key, nowEpochSeconds = nowEpochSeconds)
-        return AuthenticationResponse(idToken, request.state, request.clientId)
+    ): AuthenticationResponse = respond(request, keyStore.keyProvider(request.clientId), nowEpochSeconds)
+
+    companion object {
+        /**
+         * Issues for an already-parsed request, signed with [key] — the key of
+         * the identity the user chose to answer as.
+         */
+        fun respond(
+            request: AuthorizationRequest,
+            key: SiopKeyProvider,
+            nowEpochSeconds: Long = System.currentTimeMillis() / 1000,
+        ): AuthenticationResponse {
+            val idToken = SelfIssuedIdToken.issue(request, key, nowEpochSeconds = nowEpochSeconds)
+            return AuthenticationResponse(idToken, request.state, request.clientId)
+        }
     }
 }
 

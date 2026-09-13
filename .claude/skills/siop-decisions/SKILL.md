@@ -28,7 +28,7 @@ When unsure, ask whether the change touches the Decision section. If it does, it
 |---|---|---|
 | [0001](docs/decisions/0001-one-language-per-os.md) | Each OS is implemented in its default language, in a fixed order | Adding an implementation, or proposing a cross-platform framework |
 | [0002](docs/decisions/0002-verification-across-implementations.md) | A token is always verified by an implementation other than the one that issued it | Adding or restructuring tests, or adding an implementation |
-| [0003](docs/decisions/0003-pairwise-keys-per-rp.md) | *Superseded by 0011.* One signing key per `client_id`, with no migration from the old shared key | Working on Android, which still follows it, or on why there was no migration from the shared key |
+| [0003](docs/decisions/0003-pairwise-keys-per-rp.md) | *Superseded by 0011.* One signing key per `client_id`, with no migration from the old shared key | Working on the key-per-RP keys the apps take over, or on why there was no migration from the shared key |
 | [0004](docs/decisions/0004-keys-created-on-response.md) | A key is created when the user answers, never when a request arrives | Touching the consent screen or when keys are generated |
 | [0005](docs/decisions/0005-no-request-object.md) | The metadata says the Request Object is unsupported, both flags explicitly false | Touching the static metadata, or adding `request` / `request_uri` |
 | [0006](docs/decisions/0006-rp-verifies-in-the-browser.md) | The RP verifies in the browser; the ID Token never reaches its server | Changing the RP's verification path or adding a server endpoint |

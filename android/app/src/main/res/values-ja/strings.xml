@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Home -->
+    <string name="identities_header">あなたの識別子</string>
+    <string name="home_identities_explain">識別子は RP ごとに別の鍵です。同じ RP には複数の識別子で応答できますが、ひとつの識別子が別の RP に使われることはありません。</string>
+    <string name="home_identities_footer">sub は公開鍵の JWK サムプリント (RFC 7638) です。RP どうしが結託しても、同じ利用者だと突き合わせることはできません。</string>
+    <string name="home_empty">まだ識別子はありません。RP から認証リクエストを受け取ると、その RP 用の識別子を作成できます。</string>
+    <string name="home_metadata_header">Discovery メタデータ</string>
+    <string name="home_metadata_footer">openid:// で始まる認証リクエストを受け取ると、どの識別子で応答するかを選ぶ画面を表示します。</string>
+
+    <!-- Consent -->
+    <string name="consent_title">どの識別子で応答しますか？</string>
+    <string name="request_panel_title">受け取ったリクエスト</string>
+    <string name="requester_unverified">要求元の身元は未検証</string>
+    <string name="requester_label">要求元 / client_id</string>
+    <string name="requester_warning">この URL は検証されていません。心当たりのある相手か確認してください。</string>
+    <string name="no_value">（値なし）</string>
+    <string name="identities_panel_subtitle">この RP に使う識別子を選択</string>
+    <plurals name="identity_count">
+        <item quantity="other">%d 件</item>
+    </plurals>
+    <string name="first_request">この要求元は初めてです。応答すると、この要求元専用の識別子を作成します。</string>
+    <string name="create_identity">識別子を作成</string>
+    <string name="names_hint">表示名はこの端末だけのラベルです。RP に返すのは公開鍵から導出された sub。同じ RP にも、別の識別子で応答できます。</string>
+    <string name="details">詳細・編集</string>
+    <string name="preview_title">応答のプレビュー</string>
+    <string name="not_yet_signed">署名前</string>
+    <string name="using_identity">%1$s の鍵と識別子を使います</string>
+    <string name="new_identity_on_answer">応答時に、この RP 用の新しい鍵と識別子を作成します</string>
+    <string name="token_caption">ID Token · 署名される内容</string>
+    <string name="origin_fixed">固定値</string>
+    <string name="origin_from_client_id">client_id から</string>
+    <string name="origin_derived">公開鍵から導出</string>
+    <string name="origin_chosen_key">選択した公開鍵</string>
+    <string name="origin_from_nonce">nonce から</string>
+    <string name="origin_at_signing">発行時</string>
+    <string name="origin_copied">要求から転記</string>
+    <string name="iat_exp_value">署名時に確定 / 発行から %1$d 分</string>
+    <string name="show_whole_key">公開鍵をすべて表示</string>
+    <string name="collapse_key">公開鍵を折りたたむ</string>
+    <string name="legend_key">選択した鍵から</string>
+    <string name="legend_fixed">固定値 / 発行時</string>
+    <string name="legend_hint">識別子を切り替えると、緑の行が変わります。青の行は RP のリクエストと対応しています。</string>
+    <string name="other_scopes">%1$s も要求されていますが、この実装が返すのは sub だけで、その他の属性は含めません。</string>
+    <string name="fragment_title">URL fragment · ID Token の外側</string>
+    <string name="omitted">（省略）</string>
+    <string name="nonce_state_hint">nonce は署名されたトークンの中に、state はその外側に返します。</string>
+    <string name="created_on_answer">応答時に新しく作成します</string>
+    <string name="action_blocked">この RP の識別子の鍵を今は読み取れないため、代わりの識別子は作りません。やり直すか、自分で識別子を作成してください。</string>
+    <string name="action_new">新しい鍵を作成して署名し、要求元に返します。</string>
+    <string name="action_chosen">選択した鍵で署名し、要求元に返します。</string>
+    <string name="decline">拒否する</string>
+    <string name="use_new_identity">新しい識別子で応答</string>
+    <string name="use_this_identity">この識別子で応答</string>
+    <string name="identity_for_rp">この RP 用の識別子</string>
+    <string name="key_unreadable_row">鍵を読み取れません — この識別子では応答できません</string>
+
+    <!-- Identity editor -->
+    <string name="identity_details">識別子の詳細</string>
+    <string name="create">作成する</string>
+    <string name="save">保存する</string>
+    <string name="cancel">キャンセル</string>
+    <string name="name">表示名</string>
+    <string name="name_placeholder">例：個人用、テスト用</string>
+    <string name="note">メモ</string>
+    <string name="note_placeholder">用途など、自分用のメモ</string>
+    <string name="created_for_rp">この RP 用に作成</string>
+    <string name="creates_key_footer">この RP 用の RSA 鍵を作成し、公開鍵から sub を導出します。</string>
+    <string name="sub_header">sub · 公開鍵から導出 / 編集不可</string>
+    <string name="key_unreadable_detail">鍵を読み取れません。この識別子では応答できません。</string>
+    <string name="only_names_change">表示名とメモだけを変更します。公開鍵と sub は変わりません。</string>
+    <string name="rp_it_answers">対応する RP</string>
+    <string name="public_key_disclosure">公開鍵 sub_jwk と導出に使う JSON</string>
+    <string name="thumbprint_json">サムプリントに使う JSON</string>
+    <string name="delete_identity_and_key">識別子と鍵を削除</string>
+    <string name="delete_confirm_title">識別子を削除しますか？</string>
+    <string name="key_unreadable_paren">（鍵を読み取れません）</string>
+    <string name="delete_consequence">署名鍵も削除され、この sub では二度と応答できなくなります。RP 側のアカウントを削除する操作ではありません。</string>
+
+    <!-- Results -->
+    <string name="result_sent_title">ID Token を返しました</string>
+    <string name="result_sent_message">%1$s に応答を送信しました。</string>
+    <string name="result_undeliverable_title">応答を渡せませんでした</string>
+    <string name="result_undeliverable_message">%1$s を開けるアプリがありません。ID Token は発行済みですが、RP には届いていません。</string>
+    <string name="result_declined_title">リクエストを拒否しました</string>
+    <string name="result_declined_message">%1$s に access_denied を返しました。</string>
+    <string name="result_failed_title">処理できませんでした</string>
+    <string name="close">閉じる</string>
+    <string name="problem_title">操作できませんでした</string>
+    <string name="ok">OK</string>
+
+    <!-- Failures -->
+    <string name="failure_invalid_request">リクエストが不正です: %1$s</string>
+    <string name="failure_unsupported_response_type">未対応の response_type です: %1$s</string>
+    <string name="failure_invalid_scope">scope に openid が含まれていません</string>
+    <string name="failure_invalid_key">鍵を利用できません: %1$s</string>
+    <string name="failure_invalid_token">ID Token が不正です: %1$s</string>
+    <string name="failure_storage">端末の保存領域を利用できません: %1$s</string>
+    <string name="failure_unreadable_record">端末にある識別子の記録を読み取れません</string>
+    <string name="failure_answers_only">この識別子は %1$s 専用です。別の RP には使えません。</string>
+    <string name="failure_no_stand_in">この RP にはすでに識別子がありますが、鍵を読み取れません。代わりの識別子は作っていません。</string>
+    <string name="failure_could_not_load">識別子を読み込めませんでした: %1$s</string>
+    <string name="failure_could_not_create">識別子を作成できませんでした: %1$s</string>
+    <string name="failure_could_not_save">保存できませんでした: %1$s</string>
+    <string name="failure_could_not_delete">削除できませんでした: %1$s</string>
+</resources>

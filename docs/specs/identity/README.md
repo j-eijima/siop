@@ -7,10 +7,8 @@ keep several, and chooses which one answers a given Relying Party.
 
 ## Where this stands
 
-Built on iOS. Android still holds a separate key per `client_id` and uses it automatically, so the
-pairwise subject is there but the user never sees a choice. On iOS, the keys the key-per-RP version
-made are taken over as identities when their Relying Party next asks, so an identity already tied
-to a Relying Party stays tied to it. The [UI mock](../../../rp/public/mock.html) shows the same
+Built on iOS and Android. On both, the keys the key-per-RP version made are taken over as identities
+when their Relying Party next asks, so an identity already tied to a Relying Party stays tied to it. The [UI mock](../../../rp/public/mock.html) shows the same
 shape with temporary in-memory keys.
 
 ## Behaviour

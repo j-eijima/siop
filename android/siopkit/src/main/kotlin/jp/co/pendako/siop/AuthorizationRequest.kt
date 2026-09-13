@@ -15,10 +15,16 @@ data class AuthorizationRequest(
     val claims: String?,
     /** Raw JSON of the registration parameter, if any (Section 7.2.1). */
     val registration: String?,
+    /**
+     * Every query parameter as it arrived, in order, so that a screen can show
+     * what was actually sent rather than what was parsed out of it.
+     */
+    val receivedParameters: List<Pair<String, String>> = emptyList(),
 ) {
     companion object {
         fun parse(url: String): AuthorizationRequest {
-            val params = queryParameters(url)
+            val received = queryParameters(url)
+            val params = received.toMap()
 
             val responseType = params["response_type"]
                 ?: throw SiopError.InvalidRequest("response_type is required")
@@ -49,10 +55,11 @@ data class AuthorizationRequest(
                 idTokenHint = params["id_token_hint"],
                 claims = params["claims"],
                 registration = params["registration"],
+                receivedParameters = received,
             )
         }
 
-        private fun queryParameters(url: String): Map<String, String> {
+        private fun queryParameters(url: String): List<Pair<String, String>> {
             val query = url.substringAfter('?', "").substringBefore('#')
             if (query.isEmpty()) throw SiopError.InvalidRequest("no query parameters")
             return query.split("&").mapNotNull { pair ->
@@ -60,7 +67,7 @@ data class AuthorizationRequest(
                 val name = pair.substringBefore('=')
                 val value = pair.substringAfter('=', "")
                 name.percentDecoded() to value.percentDecoded()
-            }.toMap()
+            }
         }
 
         private fun String.percentDecoded(): String =

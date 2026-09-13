@@ -29,7 +29,8 @@ none ([0004](0004-keys-created-on-response.md)). A request arriving creates noth
 
 ## Consequences
 
-Only iOS does this so far. Android still follows 0003, and the specifications say so.
+Both apps do this. Android followed 0003 until it was rebuilt on the UI mock, and takes over the keys
+0003 made in the same way.
 
 An RP can now be answered as more than one person, by the user's choice — which is also the only
 way it can see two subjects from one device.
@@ -37,4 +38,7 @@ way it can see two subjects from one device.
 The home screen cannot list a key-per-RP key until its RP asks again, and says nothing about it
 until then.
 
-`SIOPKeyStore` stays in SIOPKit for tools such as `siop-issue`, where nobody chooses anything.
+`SIOPKeyStore` stays in SIOPKit, and `SiopKeyStore` in siopkit, for tools such as `siop-issue`, where
+nobody chooses anything.
+
+Corrected: 2026-09-13 — Android now does this too; the consequences said only iOS did.

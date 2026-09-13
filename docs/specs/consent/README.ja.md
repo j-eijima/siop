@@ -7,12 +7,9 @@
 
 ## 現状
 
-iOS で実装済み。同意画面は届いたリクエストをそのまま示し、応答に使う識別子を選ぶか作らせ
-([identity/](../identity/))、公開鍵を含めて署名される値をすべて、それぞれの出どころとともに
-プレビューする([parameters/](../parameters/))。拒否時の `access_denied` は両プラットフォームで
-返している。Android の同意画面は、要求元の `client_id`、要求された scope、`response_type`、
-`nonce`、`state`、そしてその RP に対して確立済みの `sub`(無ければ応答時に作る旨)を出すが、
-公開鍵は出さず、識別子の選択もない。
+iOS と Android で実装済み。同意画面は届いたリクエストをそのまま示し、応答に使う識別子を選ぶか
+作らせ([identity/](../identity/))、公開鍵を含めて署名される値をすべて、それぞれの出どころとともに
+プレビューする([parameters/](../parameters/))。拒否すると `access_denied` を返す。
 
 ## 振る舞い
 
@@ -75,6 +72,7 @@ Feature: Consent and the response preview
 
 ## テストで見るもの
 
-RP が受け取ったトークンが 7.5 の検証を通ることは、`ios/SIOPApp/UITests/EndToEndRPTests.swift`
-と `rp/test/` の実装横断スイートが end-to-end で判定する。上のシナリオは応答がアプリを
+RP が受け取ったトークンが 7.5 の検証を通ることは、`ios/SIOPApp/UITests/EndToEndRPTests.swift`、
+`android/app/src/androidTest/` の `EndToEndRpTest`、`rp/test/` の実装横断スイートが end-to-end で
+判定する。上のシナリオは応答がアプリを
 出るところで終わる。

@@ -1,41 +1,39 @@
 package jp.co.pendako.siop.app
 
+import android.app.Application
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
 import androidx.core.net.toUri
+import androidx.lifecycle.AndroidViewModel
+import java.io.File
+import jp.co.pendako.siop.SiopIdentityStore
 
 class MainActivity : ComponentActivity() {
-    private lateinit var session: AuthenticationSession
+    private val model: SessionModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        session = try {
-            val keys = AndroidKeystoreKeyStore(KEY_ALIAS_PREFIX)
-            // Proves the keystore is usable before relying on it for every RP.
-            keys.keyProvider("https://self-issued.me/probe")
-            AuthenticationSession(keys)
-        } catch (cause: Exception) {
-            AuthenticationSession(null, keyFailure = cause.toString())
-        }
-
         setContent {
-            MaterialTheme {
-                Surface {
-                    RootScreen(
-                        session = session,
-                        onRespond = ::openRedirect,
-                    )
+            SiopTheme {
+                Surface(Modifier.fillMaxSize()) {
+                    RootScreen(session = model.session, onRespond = ::openRedirect)
                 }
             }
         }
 
-        handle(intent)
+        // An activity recreated — turned to landscape, say — has handled its
+        // request already, and the session kept it.
+        if (savedInstanceState == null) handle(intent)
     }
 
     // launchMode is singleTask, so a request arriving while the app is running
@@ -49,7 +47,7 @@ class MainActivity : ComponentActivity() {
     private fun handle(intent: Intent) {
         val data = intent.data ?: return
         if (data.scheme != "openid") return
-        session.receive(data.toString())
+        model.session.receive(data.toString())
     }
 
     /**
@@ -72,4 +70,23 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Holds the session across configuration changes, so turning the device
+ * mid-consent keeps the request on screen.
+ */
+class SessionModel(application: Application) : AndroidViewModel(application) {
+    val session = AuthenticationSession(
+        SiopIdentityStore(
+            records = FileIdentityRecords(File(application.noBackupFilesDir, "identities")),
+            keys = AndroidKeystoreIdentityKeys(),
+            aliasPrefix = KEY_ALIAS_PREFIX,
+            adoptsPerRpKeys = true,
+        )
+    )
+}
+
+/**
+ * Shared with the key-per-RP version, so that the keys it made for each RP
+ * are found and taken over as identities (docs/decisions/0011).
+ */
 private const val KEY_ALIAS_PREFIX = "jp.co.pendako.siop.key"

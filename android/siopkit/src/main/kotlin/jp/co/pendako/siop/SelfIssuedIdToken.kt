@@ -9,10 +9,13 @@ object SelfIssuedIdToken {
     /** Section 7.4: the issuer of a self-issued ID Token. */
     const val ISSUER = "https://self-issued.me"
 
+    /** How long a token is valid for, as the consent screen tells the user. */
+    const val LIFETIME_SECONDS = 600L
+
     fun issue(
         request: AuthorizationRequest,
         key: SiopKeyProvider,
-        expiresInSeconds: Long = 600,
+        expiresInSeconds: Long = LIFETIME_SECONDS,
         nowEpochSeconds: Long = System.currentTimeMillis() / 1000,
     ): String {
         val jwk = key.publicJwk()

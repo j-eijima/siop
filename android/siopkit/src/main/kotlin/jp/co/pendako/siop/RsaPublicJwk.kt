@@ -17,10 +17,12 @@ data class RsaPublicJwk(val n: String, val e: String) {
      * self-issued ID Token (OpenID Connect Core 1.0 Section 7.4).
      */
     fun thumbprint(): String {
-        val canonical = """{"e":"$e","kty":"$kty","n":"$n"}"""
-        val digest = MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray())
+        val digest = MessageDigest.getInstance("SHA-256").digest(canonicalJson.toByteArray())
         return Base64Url.encode(digest)
     }
+
+    /** The JSON the thumbprint is taken over: the required members, in order, with no whitespace. */
+    val canonicalJson: String get() = """{"e":"$e","kty":"$kty","n":"$n"}"""
 
     fun toJsonObject(): Map<String, String> = mapOf("kty" to kty, "n" to n, "e" to e)
 
