@@ -23,10 +23,6 @@ final class AuthenticationSession: ObservableObject {
     /// RP are found and taken over as identities.
     private static let tagPrefix = "jp.co.pendako.siop.key"
 
-    /// False when the Keychain was unavailable and identities live in memory,
-    /// which means they will not survive a relaunch.
-    let isPersistent: Bool
-
     @Published private(set) var phase: Phase = .idle
     /// Every identity on the device, in the order they are offered.
     @Published private(set) var identities: [SIOPIdentity] = []
@@ -54,28 +50,12 @@ final class AuthenticationSession: ObservableObject {
         }
     ) {
         openURL = open
-        if let store {
-            self.store = store
-            isPersistent = false
-        } else {
-            let (made, persistent) = Self.makeStore()
-            self.store = made
-            isPersistent = persistent
-        }
+        // Always the Keychain, even when it cannot be read. Falling back to a
+        // store in memory would answer an RP this device knows as a stranger,
+        // with a key lost at the next launch. A store that cannot be read
+        // stops each request instead, and says why (receive).
+        self.store = store ?? .keychain(tagPrefix: Self.tagPrefix)
         refresh()
-    }
-
-    /// Prefers the Keychain so identities survive relaunches, falling back to
-    /// memory so the app remains usable. The Keychain is proven by reading
-    /// from it, which creates nothing.
-    private static func makeStore() -> (SIOPIdentityStore, Bool) {
-        let keychain = SIOPIdentityStore.keychain(tagPrefix: tagPrefix)
-        do {
-            _ = try keychain.allIdentities()
-            return (keychain, true)
-        } catch {
-            return (.ephemeral(), false)
-        }
     }
 
     // MARK: - Identities

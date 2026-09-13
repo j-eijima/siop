@@ -34,7 +34,7 @@ window.addEventListener("hashchange", () => location.reload());
 // cannot use it up; and only one response is accepted, so a second tab
 // replaying the first is turned away. The values stay in this page, so the
 // response can still be re-checked below.
-const request = pendingRequest(localStorage, STORAGE_KEY);
+const request = pendingRequest(localStorage, STORAGE_KEY, navigator.locks);
 const pending = request.value;
 
 /// What this RP expects, as it sent it. Null throughout when this browser has
@@ -159,9 +159,13 @@ async function evaluate() {
 
   const failed = checks.filter((check) => !check.ok);
   // Only against what was recorded: a swapped expectation proves nothing.
-  const replayed = failed.length === 0 && scenario.value === "normal" && !request.accept();
-  if (replayed) {
-    setVerdict("ng", t("verdict.replayed"), t("verdict.replayedDetail"));
+  const verified = failed.length === 0 && scenario.value === "normal";
+  if (verified && !(await request.accept())) {
+    if (navigator.locks) {
+      setVerdict("ng", t("verdict.replayed"), t("verdict.replayedDetail"));
+    } else {
+      setVerdict("ng", t("verdict.noLocks"), t("verdict.noLocksDetail"));
+    }
   } else if (failed.length === 0) {
     // EndToEndRPTests waits for the English title, verdict.ok in i18n.js —
     // Safari hands XCUITest no DOM ids — so change the two together.

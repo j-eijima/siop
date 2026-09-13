@@ -849,16 +849,6 @@
         }
       }
     },
-    "The Keychain is unavailable, so keys live in memory. Identities disappear when the app restarts." : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keychain が使えないため一時鍵で動作しています。再起動すると識別子は消えます。"
-          }
-        }
-      }
-    },
     "The signing key is deleted too. Unless the key is restored from a backup, this sub can never answer again. This does not delete the account the RP holds." : {
       "localizations" : {
         "ja" : {

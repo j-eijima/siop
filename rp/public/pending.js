@@ -2,8 +2,12 @@
 // — and only one — is accepted for it. Kept apart from the page so the rule
 // can be tested under Node.
 
+/// The lock every tab of this origin takes to claim the request.
+const LOCK = "siop-rp.pending-request";
+
 /// `storage` is localStorage, or anything with its getItem and removeItem.
-export function pendingRequest(storage, key) {
+/// `locks` is navigator.locks, or anything with its request(name, callback).
+export function pendingRequest(storage, key, locks) {
   const record = storage.getItem(key);
   let accepted = false;
 
@@ -16,16 +20,22 @@ export function pendingRequest(storage, key) {
     /// True for the page that claims it first, and again whenever that page
     /// asks. False for any other page: the record is gone because another tab
     /// accepted a response to it, or it has been replaced by a newer request.
-    /// Removing the record is not enough on its own — two tabs that read it
-    /// before either finished verifying would both show success — so the
-    /// claim is what decides acceptance. One response authenticates; a
-    /// second, however valid, is a replay.
-    accept() {
+    /// One response authenticates; a second, however valid, is a replay.
+    ///
+    /// Finding the record and removing it happen under a lock every tab of
+    /// this origin shares. localStorage has no compare-and-remove of its own,
+    /// so without the lock two tabs could both find the record and both
+    /// remove it. A browser that offers no locks cannot make that promise,
+    /// and accepts nothing.
+    async accept() {
       if (accepted) return true;
-      if (record === null || storage.getItem(key) !== record) return false;
-      storage.removeItem(key);
-      accepted = true;
-      return true;
+      if (record === null || !locks) return false;
+      accepted = await locks.request(LOCK, () => {
+        if (storage.getItem(key) !== record) return false;
+        storage.removeItem(key);
+        return true;
+      });
+      return accepted;
     },
   };
 }

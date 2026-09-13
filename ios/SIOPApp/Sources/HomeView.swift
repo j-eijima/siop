@@ -27,14 +27,6 @@ struct HomeView: View {
             Section {
                 Text("Each identity is a separate key for one RP. You can answer the same RP as several identities, but no identity is ever used with another RP.")
                     .font(.callout)
-                if !session.isPersistent {
-                    Label(
-                        "The Keychain is unavailable, so keys live in memory. Identities disappear when the app restarts.",
-                        systemImage: "exclamationmark.triangle"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                }
             } header: {
                 Text("Your identities")
             } footer: {
