@@ -5,19 +5,26 @@
 /// The lock every tab of this origin takes to claim the request.
 const LOCK = "siop-rp.pending-request";
 
-/// Nonces already accepted, newest last. A replay can only pass while its
-/// token is unexpired, so the last few are what matter; fifty covers any
-/// replay within a token's lifetime unless far more requests than that are
-/// made first, which a test RP does not see.
+/// Nonces already accepted, each kept until the token it was accepted with has
+/// expired. Before then nothing but this list stops that token being replayed;
+/// after it, the token fails its exp check anyway, so the nonce can go. A count
+/// would not do: the verifier puts no ceiling on a token's lifetime.
 const SPENT_KEY = "siop-rp.spent-nonces";
-const SPENT_KEPT = 50;
 
-function spentNonces(storage) {
+/// The verifier's allowance for clock skew, which a replay can use too.
+const SKEW_SECONDS = 120;
+
+/// The nonces whose tokens could still pass, or null if the list cannot be
+/// read — in which case nothing can be shown to be unspent.
+function spentNonces(storage, now) {
+  let entries;
   try {
-    return JSON.parse(storage.getItem(SPENT_KEY) ?? "[]");
+    entries = JSON.parse(storage.getItem(SPENT_KEY) ?? "[]");
   } catch {
-    return [];
+    return null;
   }
+  if (!Array.isArray(entries)) return null;
+  return entries.filter((entry) => typeof entry?.until === "number" && entry.until > now);
 }
 
 /// `storage` is localStorage, or anything with its getItem, setItem and
@@ -32,31 +39,37 @@ export function pendingRequest(storage, key, locks) {
     /// What was sent, or null when this browser has no record of it.
     value,
 
-    /// Claims the request for a response that has passed every check.
+    /// Claims the request for a response that has passed every check against
+    /// it, whose token expires at `expiresAt` (seconds since the epoch).
     ///
     /// True for the page that claims it first, and again whenever that page
     /// asks. False for any other page: the record is gone because another tab
     /// accepted a response to it, it has been replaced by a newer request, or
-    /// its nonce has been accepted before. One response authenticates; a
-    /// second, however valid, is a replay.
+    /// its nonce was accepted before with a token that is still valid. One
+    /// response authenticates; a second, however valid, is a replay.
     ///
     /// Finding the record and removing it happen under a lock every tab of
     /// this origin shares. localStorage has no compare-and-remove of its own,
     /// so without the lock two tabs could both find the record and both
-    /// remove it. A browser that offers no locks cannot make that promise,
-    /// and accepts nothing.
-    async accept() {
+    /// remove it. A browser that offers no locks cannot make that promise, and
+    /// accepts nothing; nor is anything accepted without an expiry to keep its
+    /// nonce until.
+    async accept({ expiresAt, now = Date.now() / 1000 } = {}) {
       if (accepted) return true;
-      if (record === null || !locks) return false;
+      if (record === null || !locks || typeof expiresAt !== "number") return false;
       accepted = await locks.request(LOCK, () => {
         if (storage.getItem(key) !== record) return false;
         // A record can come back after it was used — written again by a
         // request page left open, say. The nonce is what makes a request
-        // one-shot, so a nonce accepted once is never accepted again.
-        const spent = spentNonces(storage);
-        if (spent.includes(value.nonce)) return false;
+        // one-shot, so a nonce accepted once is not accepted again while its
+        // token could still pass.
+        const spent = spentNonces(storage, now);
+        if (spent === null || spent.some((entry) => entry.nonce === value.nonce)) return false;
         storage.removeItem(key);
-        storage.setItem(SPENT_KEY, JSON.stringify([...spent, value.nonce].slice(-SPENT_KEPT)));
+        storage.setItem(SPENT_KEY, JSON.stringify([
+          ...spent,
+          { nonce: value.nonce, until: expiresAt + SKEW_SECONDS },
+        ]));
         return true;
       });
       return accepted;

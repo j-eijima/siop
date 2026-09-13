@@ -60,7 +60,8 @@ for the next request, and the result page never accepts the same nonce twice.
 
 A token cannot be changed once it has arrived, but what the RP expects can. The result page
 re-checks the same token against a different `nonce`, `state` or `aud`, so one check fails while
-every other still shows as passed. The token itself is never touched.
+every other still shows as passed. The token itself is never touched, and a check against a changed
+expectation is never an authentication, whatever it finds.
 
 ## What is checked (Section 7.5)
 
@@ -96,8 +97,9 @@ Node is all that is needed; there are no dependencies.
 - `test/state.test.mjs` — the `state` comparison, which happens outside the token
 - `test/pending.test.mjs` — one response, and only one, is accepted for a request, even when two
   tabs claim it at once: finding the record and removing it run under a Web Lock every tab of the
-  origin shares, and a browser without Web Locks accepts nothing. A nonce accepted once is never
-  accepted again, even if its record is written back
+  origin shares, and a browser without Web Locks accepts nothing. A nonce accepted once is not
+  accepted again while its token is still valid, however many others follow and even if its record
+  is written back
 - `test/request.test.mjs` — the spec's rules on the request itself. Section 3.2.2.1 allows an
   http `redirect_uri` only to a native app, and only on the three hosts it names — `localhost`,
   `127.0.0.1`, `[::1]`. This RP is a web page, so it reports even its own default

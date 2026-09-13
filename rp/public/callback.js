@@ -124,8 +124,17 @@ function renderExchange() {
   $("response-raw").textContent = location.href;
 }
 
+/// Bumped by every evaluation, so one that finishes after a newer one has
+/// started — the scenario or the language changed while it waited — draws
+/// nothing.
+let evaluation = 0;
+
 async function evaluate() {
-  const expected = SCENARIOS[scenario.value](recorded);
+  const run = ++evaluation;
+  // Read once: the expectations checked and the decision made from them have
+  // to be the same ones.
+  const chosen = scenario.value;
+  const expected = SCENARIOS[chosen](recorded);
   const body = $("comparison-body");
   $("thumbprint-raw").textContent = t("result.noToken");
   $("token-raw").textContent = t("result.noToken");
@@ -155,30 +164,36 @@ async function evaluate() {
   // mismatch no longer hides every other check.
   const checks = [...result.checks, checkState(expected.state, fragment.get("state"))]
     .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
-  console.info("[SIOP RP] checks", checks);
-
   const failed = checks.filter((check) => !check.ok);
-  // Only against what was recorded: a swapped expectation proves nothing.
-  const verified = failed.length === 0 && scenario.value === "normal";
-  if (verified && !(await request.accept())) {
-    if (navigator.locks) {
-      setVerdict("ng", t("verdict.replayed"), t("verdict.replayedDetail"));
-    } else {
-      setVerdict("ng", t("verdict.noLocks"), t("verdict.noLocksDetail"));
-    }
-  } else if (failed.length === 0) {
-    // EndToEndRPTests waits for the English title, verdict.ok in i18n.js —
-    // Safari hands XCUITest no DOM ids — so change the two together.
-    setVerdict("ok", t("verdict.ok"), t("verdict.okDetail", { sub: result.payload.sub }));
-  } else if (!pending) {
+
+  let verdict;
+  if (failed.length > 0 && !pending) {
     // Most often this means the response landed in a different browser: iOS
     // sends an https URL to the *default* browser, and the OP has no way to
     // return to the specific browser that started the request. nonce and
     // state live in that browser's storage, so the check fails closed.
-    setVerdict("ng", t("verdict.noRecord"), t("verdict.noRecordDetail"));
+    verdict = ["ng", t("verdict.noRecord"), t("verdict.noRecordDetail")];
+  } else if (failed.length > 0) {
+    verdict = ["ng", t("verdict.failed"), t("verdict.failedDetail", { ids: failed.map((check) => check.id).join(" / ") })];
+  } else if (chosen !== "normal") {
+    // Every check passes, but against an expectation changed on this page, not
+    // the one this RP sent. That is a way to watch the checks, never an
+    // authentication, and it claims nothing.
+    verdict = ["ng", t("verdict.simulated"), t("verdict.simulatedDetail")];
+  } else if (await request.accept({ expiresAt: result.payload.exp })) {
+    // EndToEndRPTests waits for the English title, verdict.ok in i18n.js —
+    // Safari hands XCUITest no DOM ids — so change the two together.
+    verdict = ["ok", t("verdict.ok"), t("verdict.okDetail", { sub: result.payload.sub })];
+  } else if (navigator.locks) {
+    verdict = ["ng", t("verdict.replayed"), t("verdict.replayedDetail")];
   } else {
-    setVerdict("ng", t("verdict.failed"), t("verdict.failedDetail", { ids: failed.map((check) => check.id).join(" / ") }));
+    verdict = ["ng", t("verdict.noLocks"), t("verdict.noLocksDetail")];
   }
+
+  // A newer evaluation started while this one waited; that one draws.
+  if (run !== evaluation) return;
+  console.info("[SIOP RP] checks", checks);
+  setVerdict(...verdict);
 
   $("result-count").textContent = t("count.passed", { passed: checks.length - failed.length, total: checks.length });
   body.replaceChildren(...checks.map(row));
