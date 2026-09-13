@@ -18,11 +18,13 @@ repository that keeps the recent images and lets the rest expire, the Cloud Run 
 zero, and invocation open to everyone — a phone opening the RP carries no Google credentials, and
 there is nothing behind the page to protect.
 
-Terraform does not build the image. Cloud Build does, tagged with the commit: Cloud Run runs amd64,
-which a Mac does not build by default, and Terraform describes what runs rather than how it is made.
-The service runs the image by digest. A tag can be pushed again, and Terraform, seeing the same
-name, would leave the old revision serving.
-`deploy.sh` applies once to create the registry, builds, then applies again.
+Terraform does not build the image. Cloud Build does, tagged with the commit and a suffix unique to
+the build: Cloud Run runs amd64, which a Mac does not build by default, and Terraform describes what
+runs rather than how it is made. The service runs the image by digest, looked up by that tag, so
+what runs is the image this build pushed and no other.
+`deploy.sh` applies once to create the registry, builds, then applies again. It applies without
+asking: running the script is the approval, and `terraform plan` shows beforehand what it would
+change.
 
 Each cloud gets a directory of its own under `rp/deploy/`. Terraform reads every `.tf` file in a
 directory as one configuration, so a second cloud beside the first would collide with it — the same

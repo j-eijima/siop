@@ -25,7 +25,7 @@ resource "google_artifact_registry_repository" "rp" {
   format        = "DOCKER"
   description   = "Images of the SIOP test RP"
 
-  # Every deploy pushes an image tagged with its commit. Keep the last few, so
+  # Every deploy pushes an image of its own. Keep the last few, so
   # a bad deploy can be rolled back, and let the rest go.
   cleanup_policy_dry_run = false
   cleanup_policies {
