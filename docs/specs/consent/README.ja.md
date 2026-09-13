@@ -66,6 +66,9 @@ Feature: Consent and the response preview
 - If the request cannot be parsed at all, then the SIOP app shall say so and shall not contact the
   redirect URI it failed to read.
   (解釈できないリクエストは、そう表示し、読めなかった redirect URI に接続しない)
+- If the identities on the device cannot be read, then the SIOP app shall say so and shall not ask
+  for consent.
+  (端末の識別子を読み込めないときは、そう表示し、同意を求めない)
 - While the app is waiting for the user's answer, the SIOP app shall show the values it will sign
   rather than a summary of them.
   (待っている間に見せるのは、署名する実際の値であって要約ではない)

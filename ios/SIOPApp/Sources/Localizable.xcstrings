@@ -869,6 +869,26 @@
         }
       }
     },
+    "This RP already has an identity, but its key cannot be read. No new one was made in its place." : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この RP にはすでに識別子がありますが、鍵を読み取れません。代わりの識別子は作っていません。"
+          }
+        }
+      }
+    },
+    "This RP's identity cannot be read right now, so no new one is made in its place. Try again, or create one yourself." : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この RP の識別子の鍵を今は読み取れないため、代わりの識別子は作りません。やり直すか、自分で識別子を作成してください。"
+          }
+        }
+      }
+    },
     "This URL has not been verified. Make sure you recognise who is asking." : {
       "localizations" : {
         "ja" : {

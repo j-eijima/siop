@@ -72,6 +72,9 @@ Feature: Identity management and selection
 - If a signing key cannot be read from the device's key store, then the SIOP app shall show the
   identity as unusable rather than omitting it from the list.
   (鍵が読めない識別子は、一覧から消さずに使用不可として見せる)
+- If a Relying Party has an identity whose signing key cannot be read, then the SIOP app shall not
+  answer that Relying Party as a new identity unless the user creates one.
+  (識別子があるのに鍵が読めない RP には、利用者が自分で作らない限り、新しい識別子で応答しない)
 
 ## テストで見るもの
 

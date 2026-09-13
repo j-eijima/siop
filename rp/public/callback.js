@@ -28,15 +28,19 @@ const fragment = new URLSearchParams(location.hash.slice(1));
 // it were the new one.
 window.addEventListener("hashchange", () => location.reload());
 
-const pending = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
+const pendingRecord = localStorage.getItem(STORAGE_KEY);
+const pending = JSON.parse(pendingRecord ?? "null");
 
-// One-shot: the nonce must not be reusable for a later response. It is spent
-// only by the response that answers it — the one carrying the state it was
-// sent with — so a stale tab or an unsolicited link cannot throw away a request
-// whose real response is still on its way. The values stay in this page, so
-// the response can still be re-checked below.
-if (pending && fragment.has("id_token") && checkState(pending.state ?? "", fragment.get("state")).ok) {
-  localStorage.removeItem(STORAGE_KEY);
+/// One-shot: the nonce must not be reusable for a later response. The record
+/// is spent only by a response that passes every check against it — so a
+/// stale tab or an unsolicited link, with a state or without one, cannot throw
+/// away a request whose real response is still on its way — and only while it
+/// is still the record this page read, not a newer request from another tab.
+/// The values stay in this page, so the response can still be re-checked.
+function spend() {
+  if (pendingRecord !== null && localStorage.getItem(STORAGE_KEY) === pendingRecord) {
+    localStorage.removeItem(STORAGE_KEY);
+  }
 }
 
 /// What this RP expects, as it sent it. Null throughout when this browser has
@@ -160,6 +164,8 @@ async function evaluate() {
   console.info("[SIOP RP] checks", checks);
 
   const failed = checks.filter((check) => !check.ok);
+  // Only against what was recorded: a swapped expectation proves nothing.
+  if (failed.length === 0 && scenario.value === "normal") spend();
   if (failed.length === 0) {
     // EndToEndRPTests waits for the English title, verdict.ok in i18n.js —
     // Safari hands XCUITest no DOM ids — so change the two together.

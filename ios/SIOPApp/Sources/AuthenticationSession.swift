@@ -123,10 +123,16 @@ final class AuthenticationSession: ObservableObject {
 
     private func refresh() {
         do {
-            identities = try store.allIdentities()
+            try reload()
         } catch {
             problem = String(localized: "Could not load identities: \(Self.describe(error))")
         }
+    }
+
+    /// Reads every identity and the public key behind each. An identity whose
+    /// key cannot be read is kept without one, so it is shown as unusable.
+    private func reload() throws {
+        identities = try store.allIdentities()
         var keys: [SIOPIdentity.ID: RSAPublicJWK] = [:]
         for identity in identities {
             keys[identity.id] = try? store.publicJWK(of: identity)
@@ -156,17 +162,27 @@ final class AuthenticationSession: ObservableObject {
 
     func receive(_ url: URL) {
         requestGeneration += 1
+        let request: AuthorizationRequest
         do {
-            let request = try AuthorizationRequest(url: url)
+            request = try AuthorizationRequest(url: url)
+        } catch {
+            phase = .failed(Self.describe(error))
+            return
+        }
+        do {
             // Takes over the key the key-per-RP version made for this RP, if
             // there is one, so it is offered. Creates no key: nobody has
             // answered anything yet.
-            _ = try? store.identities(for: request.clientID)
-            refresh()
-            phase = .consent(request)
+            _ = try store.identities(for: request.clientID)
+            try reload()
         } catch {
-            phase = .failed(Self.describe(error))
+            // Fail closed. Carrying on would show an RP this device has
+            // answered as a new one, and answering it would make a new key —
+            // a different subject, and to the RP a different person.
+            phase = .failed(String(localized: "Could not load identities: \(Self.describe(error))"))
+            return
         }
+        phase = .consent(request)
     }
 
     /// Signs as `identity`, or — when there is none to sign as — as a new
@@ -176,6 +192,13 @@ final class AuthenticationSession: ObservableObject {
         if let identity, identity.clientID != request.clientID {
             // Two RPs answered by one identity would be handed one subject.
             phase = .failed(String(localized: "This identity answers only \(identity.clientID). It cannot answer another RP."))
+            return
+        }
+        if identity == nil, !identities(for: request.clientID).isEmpty {
+            // A new identity is made only for an RP that has none. One whose
+            // identity exists but cannot sign right now gets no stand-in:
+            // that would answer as someone else.
+            phase = .failed(String(localized: "This RP already has an identity, but its key cannot be read. No new one was made in its place."))
             return
         }
         do {

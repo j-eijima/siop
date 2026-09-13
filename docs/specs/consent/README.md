@@ -63,6 +63,8 @@ Feature: Consent and the response preview
   parameter and shall not ask for consent.
 - If the request cannot be parsed at all, then the SIOP app shall say so and shall not contact the
   redirect URI it failed to read.
+- If the identities on the device cannot be read, then the SIOP app shall say so and shall not ask
+  for consent.
 - While the app is waiting for the user's answer, the SIOP app shall show the values it will sign
   rather than a summary of them.
 

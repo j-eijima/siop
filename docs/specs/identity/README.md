@@ -68,6 +68,8 @@ Feature: Identity management and selection
 - The SIOP app shall keep an identity's association with a Relying Party until the user changes it.
 - If a signing key cannot be read from the device's key store, then the SIOP app shall show the
   identity as unusable rather than omitting it from the list.
+- If a Relying Party has an identity whose signing key cannot be read, then the SIOP app shall not
+  answer that Relying Party as a new identity unless the user creates one.
 
 ## Checked by test instead
 

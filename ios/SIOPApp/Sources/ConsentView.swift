@@ -30,6 +30,13 @@ struct ConsentView: View {
         return usable.first { $0.id == chosenID } ?? usable.first
     }
 
+    /// This RP has identities but none can sign. A new one is not made in
+    /// their place, since that would answer as someone else; the user can
+    /// still create one on purpose.
+    private var blocked: Bool {
+        signer == nil && !candidates.isEmpty
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -216,7 +223,9 @@ struct ConsentView: View {
     private var actionBar: some View {
         VStack(spacing: 8) {
             Group {
-                if signer == nil {
+                if blocked {
+                    Text("This RP's identity cannot be read right now, so no new one is made in its place. Try again, or create one yourself.")
+                } else if signer == nil {
                     Text("A new key will sign, and the response goes back to the requester.")
                 } else {
                     Text("The chosen key will sign, and the response goes back to the requester.")
@@ -251,6 +260,7 @@ struct ConsentView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(Palette.key)
                 .controlSize(.large)
+                .disabled(blocked)
                 .accessibilityIdentifier("approve")
             }
         }

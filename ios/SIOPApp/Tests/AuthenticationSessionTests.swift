@@ -191,6 +191,65 @@ final class AuthenticationSessionTests: XCTestCase {
         XCTAssertEqual(session.subject(of: renamed), before)
     }
 
+    /// Keys that cannot be read at all, as when the Keychain refuses.
+    private final class UnreadableKeys: SIOPIdentityKeys {
+        func key(tag: String) throws -> SIOPKeyProvider? { throw SIOPError.keyStore(-25308) }
+        func createKey(tag: String) throws -> SIOPKeyProvider { try SecKeyProvider.generate() }
+        func removeKey(tag: String) throws {}
+    }
+
+    /// Keys that exist, but stop being readable once told to.
+    private final class ForgetfulKeys: SIOPIdentityKeys {
+        let base = InMemoryIdentityKeys()
+        var forgets = false
+        func key(tag: String) throws -> SIOPKeyProvider? {
+            if forgets { return nil }
+            return try base.key(tag: tag)
+        }
+        func createKey(tag: String) throws -> SIOPKeyProvider { try base.createKey(tag: tag) }
+        func removeKey(tag: String) throws { try base.removeKey(tag: tag) }
+    }
+
+    /// If the identities cannot be read, an RP this device has answered would
+    /// look new, and answering it would make a different subject. The request
+    /// must stop there rather than reach the consent screen.
+    func testARequestStopsWhenIdentitiesCannotBeRead() throws {
+        let deliveries = Deliveries()
+        let store = SIOPIdentityStore(records: InMemoryIdentityRecords(), keys: UnreadableKeys(), tagPrefix: "test", adoptsPerRPKeys: true)
+        let session = AuthenticationSession(store: store, open: deliveries.open)
+
+        session.receive(requestURL())
+
+        guard case .failed = session.phase else {
+            return XCTFail("識別子を読めないのに同意画面へ進んでいる")
+        }
+        XCTAssertTrue(session.identities.isEmpty)
+        XCTAssertTrue(deliveries.urls.isEmpty)
+    }
+
+    /// An identity that exists but cannot sign right now gets no stand-in:
+    /// answering as a new identity would answer as someone else.
+    func testAnIdentityThatCannotSignIsNotReplacedUnasked() throws {
+        let keys = ForgetfulKeys()
+        let deliveries = Deliveries()
+        let store = SIOPIdentityStore(records: InMemoryIdentityRecords(), keys: keys, tagPrefix: "test")
+        let session = AuthenticationSession(store: store, open: deliveries.open)
+        _ = try XCTUnwrap(session.createIdentity(for: clientID, label: "established", note: ""))
+        keys.forgets = true
+
+        let request = try consent(session)
+        XCTAssertEqual(session.identities.count, 1)
+        XCTAssertNil(session.subject(of: session.identities[0]), "読めない鍵の識別子に sub が付いている")
+
+        session.approve(request, as: nil)
+
+        guard case .failed = session.phase else {
+            return XCTFail("読めない識別子の代わりに新しい識別子で応答しようとしている")
+        }
+        XCTAssertEqual(session.identities.count, 1, "代わりの識別子を作っている")
+        XCTAssertTrue(deliveries.urls.isEmpty)
+    }
+
     func testDeletingRemovesTheIdentity() throws {
         let session = AuthenticationSession(store: .ephemeral(), open: Deliveries().open)
         let identity = try XCTUnwrap(session.createIdentity(for: clientID, label: "gone", note: ""))
