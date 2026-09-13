@@ -134,10 +134,11 @@ Cloud Run は amd64 で動き、Mac は arm64 でビルドするので、イメ�
 そこで `terraform output url` を実行すると出る。
 
 状態ファイルは `deploy/gcp/` に置き、コミットしない。スクリプトが最後のデプロイの
-プロジェクト・リージョン・イメージを書き出す `terraform.tfvars` も同じ扱い。これにより `deploy/gcp/` で
+プロジェクト・リージョン・イメージを書き出す `deploy.auto.tfvars` も同じ扱い。これにより `deploy/gcp/` で
 `terraform plan` や `terraform destroy` を引数なしで実行できる。`destroy` で全部片付くが、
-API は有効のまま残る。スクリプトを使わずに Terraform を動かすときは、`terraform.tfvars.sample` を
-見本にする。
+API は有効のまま残る。スクリプトは `terraform.tfvars` には書かない。サービス名など自分の設定は
+そこに書けば、デプロイしても残る。`terraform.tfvars.sample` がその見本で、スクリプトを使わずに
+Terraform を動かすときにも使う。
 
 ## 既知の制約
 

@@ -31,7 +31,9 @@ directory as one configuration, so a second cloud beside the first would collide
 variable and output names — and share its state.
 
 The state stays on the machine that deploys, and is not committed. So do the variables of the last
-deploy, which `deploy.sh` writes beside it so that later commands there need no arguments.
+deploy, which `deploy.sh` writes beside it so that later commands there need no arguments — to a
+file of its own, `deploy.auto.tfvars`, never to `terraform.tfvars`, which holds the deployer's own
+settings such as the service name and so survives every deploy.
 
 ## Consequences
 

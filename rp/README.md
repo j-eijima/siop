@@ -141,11 +141,12 @@ builds, and applies again. It applies without asking — running it is the appro
 it would change, run `terraform plan` in `deploy/gcp/` first. `terraform output url` there prints
 where the RP is.
 
-The state stays in `deploy/gcp/` and is not committed, and so does `terraform.tfvars`, where the script
-records the project, region and image of the last deploy. That makes `terraform plan` and
+The state stays in `deploy/gcp/` and is not committed, and so does `deploy.auto.tfvars`, where the
+script records the project, region and image of the last deploy. That makes `terraform plan` and
 `terraform destroy` in `deploy/gcp/` work without arguments; `destroy` takes everything down again but
-leaves the APIs enabled. `terraform.tfvars.sample` shows its shape, for running Terraform there
-without the script.
+leaves the APIs enabled. The script never writes `terraform.tfvars`: settings of your own, such as
+the service name, go there and are kept across deploys. `terraform.tfvars.sample` shows its shape,
+also for running Terraform there without the script.
 
 ## Known limitations
 

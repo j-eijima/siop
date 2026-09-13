@@ -1,5 +1,8 @@
-# The shape of terraform.tfvars, which deploy.sh writes on every deploy so that
-# a later `terraform plan` or `terraform destroy` here needs no arguments.
+# The shape of terraform.tfvars, for settings of your own. deploy.sh never
+# writes it: it records the project, region and image of each deploy in
+# deploy.auto.tfvars, which Terraform reads after this file, so those three
+# from the script win and everything else here — the service name, say — is
+# kept.
 #
 # terraform.tfvars itself is not committed (.gitignore): it names one person's
 # project. To run Terraform here without deploy.sh, copy this file to
@@ -11,6 +14,10 @@ project = "your-gcp-project"
 # Optional; asia-northeast1 when left out.
 region = "asia-northeast1"
 
+# Optional; siop-rp when left out. It becomes part of the RP's URL, so
+# changing it moves the RP.
+# service = "siop-rp"
+
 # The image to run. It has to exist already: deploy.sh builds it, tagged with
-# the commit, and records it by digest so that a rebuild always rolls out.
+# the commit and a suffix unique to the build, and records it by digest.
 image = "asia-northeast1-docker.pkg.dev/your-gcp-project/siop/rp@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

@@ -51,10 +51,14 @@ digest=$(gcloud artifacts docker images describe "$repository:$tag" \
   --project "$project" --format='value(image_summary.digest)')
 image="$repository@$digest"
 
-# Recorded beside the state, which Terraform reads on its own, so a later plan
-# or destroy in this directory needs no arguments. Like the state, it stays on
-# this machine (.gitignore).
-cat > "$here/terraform.tfvars" <<VARS
+# Recorded beside the state, in a file Terraform reads on its own, so a later
+# plan or destroy in this directory needs no arguments. The file is the
+# script's alone and is rewritten on every deploy; terraform.tfvars is left to
+# whoever deploys, for settings such as the service name, and its values
+# survive here. Terraform reads *.auto.tfvars after terraform.tfvars, so what
+# this script was given wins. Like the state, both stay on this machine
+# (.gitignore).
+cat > "$here/deploy.auto.tfvars" <<VARS
 project = "$project"
 region  = "$region"
 image   = "$image"
